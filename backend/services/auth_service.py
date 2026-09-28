@@ -3,8 +3,7 @@ from typing import Optional, Dict, Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-import secrets
+from sqlalchemy.orm import Session
 
 from backend.config import settings
 from backend.models import User, UserRole
@@ -27,7 +26,7 @@ REFRESH_TOKEN_EXPIRE_DAYS = settings.REFRESH_TOKEN_EXPIRE_DAYS
 
 
 class AuthService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
@@ -70,11 +69,10 @@ class AuthService:
         except JWTError:
             return None
 
-    async def authenticate_user(self, email: str, password: str) -> Optional[User]:
+    def authenticate_user(self, email: str, password: str) -> Optional[User]:
         """Authenticate a user with email and password."""
         stmt = select(User).where(User.email == email.lower())
-        result = await self.db.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = self.db.execute(stmt).scalar_one_or_none()
         
         if not user:
             return None
@@ -85,22 +83,20 @@ class AuthService:
         
         return user
 
-    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+    def get_user_by_id(self, user_id: int) -> Optional[User]:
         """Get user by ID."""
         stmt = select(User).where(User.id == user_id)
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        return self.db.execute(stmt).scalar_one_or_none()
 
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    def get_user_by_email(self, email: str) -> Optional[User]:
         """Get user by email."""
         stmt = select(User).where(User.email == email.lower())
-        result = await self.db.execute(stmt)
-        return result.scalar_one_or_none()
+        return self.db.execute(stmt).scalar_one_or_none()
 
-    async def create_user(self, user_data: UserCreate) -> User:
+    def create_user(self, user_data: UserCreate) -> User:
         """Create a new user."""
         # Check if email exists
-        existing = await self.get_user_by_email(user_data.email)
+        existing = self.get_user_by_email(user_data.email)
         if existing:
             raise ValueError("Email already registered")
         
@@ -115,13 +111,13 @@ class AuthService:
             preferences=UserPreferences().model_dump(),
         )
         self.db.add(user)
-        await self.db.flush()
-        await self.db.refresh(user)
+        self.db.flush()
+        self.db.refresh(user)
         return user
 
-    async def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
+    def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[User]:
         """Update user information."""
-        user = await self.get_user_by_id(user_id)
+        user = self.get_user_by_id(user_id)
         if not user:
             return None
         
@@ -129,7 +125,7 @@ class AuthService:
         
         if "email" in update_data:
             # Check if new email is taken
-            existing = await self.get_user_by_email(update_data["email"])
+            existing = self.get_user_by_email(update_data["email"])
             if existing and existing.id != user_id:
                 raise ValueError("Email already registered")
             update_data["email"] = update_data["email"].lower()
@@ -144,13 +140,13 @@ class AuthService:
             setattr(user, field, value)
         
         user.updated_at = datetime.utcnow()
-        await self.db.flush()
-        await self.db.refresh(user)
+        self.db.flush()
+        self.db.refresh(user)
         return user
 
-    async def change_password(self, user_id: int, current_password: str, new_password: str) -> bool:
+    def change_password(self, user_id: int, current_password: str, new_password: str) -> bool:
         """Change user password."""
-        user = await self.get_user_by_id(user_id)
+        user = self.get_user_by_id(user_id)
         if not user:
             return False
         
@@ -159,27 +155,27 @@ class AuthService:
         
         user.password_hash = self.get_password_hash(new_password)
         user.updated_at = datetime.utcnow()
-        await self.db.flush()
+        self.db.flush()
         return True
 
-    async def update_last_login(self, user_id: int) -> None:
+    def update_last_login(self, user_id: int) -> None:
         """Update user's last login timestamp."""
-        user = await self.get_user_by_id(user_id)
+        user = self.get_user_by_id(user_id)
         if user:
             user.last_login_at = datetime.utcnow()
-            await self.db.flush()
+            self.db.flush()
 
-    async def deactivate_user(self, user_id: int) -> bool:
+    def deactivate_user(self, user_id: int) -> bool:
         """Deactivate a user account."""
-        user = await self.get_user_by_id(user_id)
+        user = self.get_user_by_id(user_id)
         if not user:
             return False
         user.is_active = False
         user.updated_at = datetime.utcnow()
-        await self.db.flush()
+        self.db.flush()
         return True
 
-    async def create_tokens(self, user: User) -> tuple[str, str]:
+    def create_tokens(self, user: User) -> tuple[str, str]:
         """Create access and refresh tokens for a user."""
         access_token = self.create_access_token(
             data={"sub": user.id, "email": user.email, "role": user.role.value}
@@ -189,7 +185,7 @@ class AuthService:
         )
         return access_token, refresh_token
 
-    async def refresh_access_token(self, refresh_token: str) -> Optional[str]:
+    def refresh_access_token(self, refresh_token: str) -> Optional[str]:
         """Create new access token from refresh token."""
         token_data = self.decode_token(refresh_token)
         if not token_data or token_data.user_id is None:
@@ -203,7 +199,7 @@ class AuthService:
         except JWTError:
             return None
         
-        user = await self.get_user_by_id(token_data.user_id)
+        user = self.get_user_by_id(token_data.user_id)
         if not user or not user.is_active:
             return None
         
@@ -229,17 +225,17 @@ class AuthService:
         except JWTError:
             return None
 
-    async def reset_password(self, token: str, new_password: str) -> bool:
+    def reset_password(self, token: str, new_password: str) -> bool:
         """Reset user password using reset token."""
         email = self.verify_reset_token(token)
         if not email:
             return False
         
-        user = await self.get_user_by_email(email)
+        user = self.get_user_by_email(email)
         if not user:
             return False
         
         user.password_hash = self.get_password_hash(new_password)
         user.updated_at = datetime.utcnow()
-        await self.db.flush()
+        self.db.flush()
         return True

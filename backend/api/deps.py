@@ -1,7 +1,7 @@
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from jose import jwt, JWTError
 
 from backend.config import settings
@@ -12,9 +12,9 @@ from backend.models import User
 security = HTTPBearer(auto_error=False)
 
 
-async def get_current_user(
+def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ) -> User:
     """Get current authenticated user from JWT token."""
     if not credentials:
@@ -50,7 +50,7 @@ async def get_current_user(
         )
     
     auth_service = AuthService(db)
-    user = await auth_service.get_user_by_id(user_id)
+    user = auth_service.get_user_by_id(user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -67,7 +67,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
+def get_current_active_user(
     current_user: User = Depends(get_current_user)
 ) -> User:
     """Get current active user."""
@@ -79,7 +79,7 @@ async def get_current_active_user(
     return current_user
 
 
-async def get_current_admin_user(
+def get_current_admin_user(
     current_user: User = Depends(get_current_active_user)
 ) -> User:
     """Get current user and verify admin role."""
@@ -91,15 +91,15 @@ async def get_current_admin_user(
     return current_user
 
 
-async def get_optional_user(
+def get_optional_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: Session = Depends(get_db)
 ) -> Optional[User]:
     """Get current user if authenticated, otherwise None."""
     if not credentials:
         return None
     
     try:
-        return await get_current_user(credentials, db)
+        return get_current_user(credentials, db)
     except HTTPException:
         return None

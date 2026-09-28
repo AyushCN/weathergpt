@@ -1,7 +1,9 @@
 from sqlalchemy import select, func, and_, or_, desc
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
+import pandas as pd
+
 from backend.models import (
     Location,
     WeatherObservation,
@@ -22,11 +24,11 @@ from backend.schemas import (
 
 
 class DatabaseService:
-    def __init__(self, db: AsyncSession):
+    def __init__(self, db: Session):
         self.db = db
 
     # Location operations
-    async def get_or_create_location(
+    def get_or_create_location(
         self,
         name: str,
         latitude: float,
@@ -41,7 +43,7 @@ class DatabaseService:
                 func.abs(Location.longitude - longitude) < 0.01,
             )
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         location = result.scalar_one_or_none()
         
         if location:
@@ -55,42 +57,42 @@ class DatabaseService:
             **kwargs
         )
         self.db.add(location)
-        await self.db.flush()
+        self.db.flush()
         return location
 
-    async def get_location_by_id(self, location_id: int) -> Optional[Location]:
+    def get_location_by_id(self, location_id: int) -> Optional[Location]:
         stmt = select(Location).where(Location.id == location_id)
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def search_locations(self, query: str, limit: int = 10) -> List[Location]:
+    def search_locations(self, query: str, limit: int = 10) -> List[Location]:
         stmt = (
             select(Location)
             .where(Location.name.ilike(f"%{query}%"))
             .where(Location.is_active == True)
             .limit(limit)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
     # Weather Observation operations
-    async def save_observation(self, obs: WeatherObservationCreate) -> WeatherObservation:
+    def save_observation(self, obs: WeatherObservationCreate) -> WeatherObservation:
         db_obs = WeatherObservation(**obs.model_dump())
         self.db.add(db_obs)
-        await self.db.flush()
+        self.db.flush()
         return db_obs
 
-    async def get_latest_observation(self, location_id: int) -> Optional[WeatherObservation]:
+    def get_latest_observation(self, location_id: int) -> Optional[WeatherObservation]:
         stmt = (
             select(WeatherObservation)
             .where(WeatherObservation.location_id == location_id)
             .order_by(desc(WeatherObservation.timestamp))
             .limit(1)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_observations_range(
+    def get_observations_range(
         self,
         location_id: int,
         start: datetime,
@@ -107,31 +109,31 @@ class DatabaseService:
             )
             .order_by(WeatherObservation.timestamp)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_recent_observations(
+    def get_recent_observations(
         self,
         location_id: int,
         hours: int = 24
     ) -> List[WeatherObservation]:
         start = datetime.utcnow() - timedelta(hours=hours)
-        return await self.get_observations_range(location_id, start, datetime.utcnow())
+        return self.get_observations_range(location_id, start, datetime.utcnow())
 
     # Weather Forecast operations
-    async def save_forecast(self, forecast: WeatherForecastCreate) -> WeatherForecast:
+    def save_forecast(self, forecast: WeatherForecastCreate) -> WeatherForecast:
         db_fcst = WeatherForecast(**forecast.model_dump())
         self.db.add(db_fcst)
-        await self.db.flush()
+        self.db.flush()
         return db_fcst
 
-    async def bulk_save_forecasts(self, forecasts: List[WeatherForecastCreate]) -> List[WeatherForecast]:
+    def bulk_save_forecasts(self, forecasts: List[WeatherForecastCreate]) -> List[WeatherForecast]:
         db_fcsts = [WeatherForecast(**f.model_dump()) for f in forecasts]
         self.db.add_all(db_fcsts)
-        await self.db.flush()
+        self.db.flush()
         return db_fcsts
 
-    async def get_forecasts(
+    def get_forecasts(
         self,
         location_id: int,
         start: datetime,
@@ -148,33 +150,33 @@ class DatabaseService:
             )
             .order_by(WeatherForecast.valid_time)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_latest_forecast_run(self, location_id: int) -> Optional[WeatherForecast]:
+    def get_latest_forecast_run(self, location_id: int) -> Optional[WeatherForecast]:
         stmt = (
             select(WeatherForecast)
             .where(WeatherForecast.location_id == location_id)
             .order_by(desc(WeatherForecast.forecast_timestamp))
             .limit(1)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return result.scalar_one_or_none()
 
     # Weather Prediction operations
-    async def save_prediction(self, pred: WeatherPredictionCreate) -> WeatherPrediction:
+    def save_prediction(self, pred: WeatherPredictionCreate) -> WeatherPrediction:
         db_pred = WeatherPrediction(**pred.model_dump())
         self.db.add(db_pred)
-        await self.db.flush()
+        self.db.flush()
         return db_pred
 
-    async def bulk_save_predictions(self, predictions: List[WeatherPredictionCreate]) -> List[WeatherPrediction]:
+    def bulk_save_predictions(self, predictions: List[WeatherPredictionCreate]) -> List[WeatherPrediction]:
         db_preds = [WeatherPrediction(**p.model_dump()) for p in predictions]
         self.db.add_all(db_preds)
-        await self.db.flush()
+        self.db.flush()
         return db_preds
 
-    async def get_predictions(
+    def get_predictions(
         self,
         location_id: int,
         prediction_type: str,
@@ -193,11 +195,11 @@ class DatabaseService:
             )
             .order_by(WeatherPrediction.valid_time)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
     # Weather Alert operations
-    async def save_alert(self, alert: WeatherAlertCreate) -> WeatherAlert:
+    def save_alert(self, alert: WeatherAlertCreate) -> WeatherAlert:
         # Check if similar alert already exists
         stmt = select(WeatherAlert).where(
             and_(
@@ -206,7 +208,7 @@ class DatabaseService:
                 WeatherAlert.source_id == alert.source_id,
             )
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         existing = result.scalar_one_or_none()
         
         if existing:
@@ -214,21 +216,21 @@ class DatabaseService:
             for key, value in alert.model_dump().items():
                 setattr(existing, key, value)
             existing.updated_at = datetime.utcnow()
-            await self.db.flush()
+            self.db.flush()
             return existing
         
         db_alert = WeatherAlert(**alert.model_dump())
         self.db.add(db_alert)
-        await self.db.flush()
+        self.db.flush()
         return db_alert
 
-    async def bulk_save_alerts(self, alerts: List[WeatherAlertCreate]) -> List[WeatherAlert]:
+    def bulk_save_alerts(self, alerts: List[WeatherAlertCreate]) -> List[WeatherAlert]:
         saved = []
         for alert in alerts:
-            saved.append(await self.save_alert(alert))
+            saved.append(self.save_alert(alert))
         return saved
 
-    async def get_active_alerts(self, location_id: int) -> List[WeatherAlert]:
+    def get_active_alerts(self, location_id: int) -> List[WeatherAlert]:
         now = datetime.utcnow()
         stmt = (
             select(WeatherAlert)
@@ -242,10 +244,10 @@ class DatabaseService:
             )
             .order_by(desc(WeatherAlert.severity), desc(WeatherAlert.issued_at))
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_all_active_alerts(self) -> List[WeatherAlert]:
+    def get_all_active_alerts(self) -> List[WeatherAlert]:
         now = datetime.utcnow()
         stmt = (
             select(WeatherAlert)
@@ -258,21 +260,21 @@ class DatabaseService:
             )
             .order_by(desc(WeatherAlert.severity), desc(WeatherAlert.issued_at))
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
     # User Query operations
-    async def save_query(self, session_id: str, user_message: str, **kwargs) -> UserQuery:
+    def save_query(self, session_id: str, user_message: str, **kwargs) -> UserQuery:
         query = UserQuery(
             session_id=session_id,
             user_message=user_message,
             **kwargs
         )
         self.db.add(query)
-        await self.db.flush()
+        self.db.flush()
         return query
 
-    async def update_query_response(
+    def update_query_response(
         self,
         query_id: int,
         ai_response: str,
@@ -281,7 +283,7 @@ class DatabaseService:
         response_time_ms: int
     ) -> Optional[UserQuery]:
         stmt = select(UserQuery).where(UserQuery.id == query_id)
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         query = result.scalar_one_or_none()
         
         if query:
@@ -289,24 +291,24 @@ class DatabaseService:
             query.intent = intent
             query.extracted_entities = entities
             query.response_time_ms = response_time_ms
-            await self.db.flush()
+            self.db.flush()
         
         return query
 
     # Historical Weather operations
-    async def save_historical(self, hist: HistoricalWeatherCreate) -> HistoricalWeather:
+    def save_historical(self, hist: HistoricalWeatherCreate) -> HistoricalWeather:
         db_hist = HistoricalWeather(**hist.model_dump())
         self.db.add(db_hist)
-        await self.db.flush()
+        self.db.flush()
         return db_hist
 
-    async def bulk_save_historical(self, historical: List[HistoricalWeatherCreate]) -> List[HistoricalWeather]:
+    def bulk_save_historical(self, historical: List[HistoricalWeatherCreate]) -> List[HistoricalWeather]:
         db_hists = [HistoricalWeather(**h.model_dump()) for h in historical]
         self.db.add_all(db_hists)
-        await self.db.flush()
+        self.db.flush()
         return db_hists
 
-    async def get_historical_range(
+    def get_historical_range(
         self,
         location_id: int,
         start_year: int,
@@ -323,10 +325,10 @@ class DatabaseService:
             )
             .order_by(HistoricalWeather.date)
         )
-        result = await self.db.execute(stmt)
+        result = self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def get_historical_statistics(
+    def get_historical_statistics(
         self,
         location_id: int,
         years: int = 10
@@ -335,7 +337,7 @@ class DatabaseService:
         end_year = datetime.now().year
         start_year = end_year - years
         
-        hist_data = await self.get_historical_range(location_id, start_year, end_year)
+        hist_data = self.get_historical_range(location_id, start_year, end_year)
         
         if not hist_data:
             return {}
@@ -371,7 +373,3 @@ class DatabaseService:
             "monthly_avg_temp": df.groupby("month")["avg_temp"].mean().to_dict(),
             "monthly_avg_rain": df.groupby("month")["rainfall"].mean().to_dict(),
         }
-
-
-# Need to import pandas at top
-import pandas as pd

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 from backend.database import get_db
@@ -32,7 +32,7 @@ async def get_current_weather(
     latitude: Optional[float] = Query(None, ge=-90, le=90),
     longitude: Optional[float] = Query(None, ge=-180, le=180),
     location_name: Optional[str] = None,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get current weather for a location. If lat/lon not provided, uses user's default location."""
@@ -46,7 +46,7 @@ async def get_current_weather(
     
     if lat is None or lon is None:
         if current_user:
-            default_loc = await user_service.get_default_location(current_user.id)
+            default_loc = user_service.get_default_location(current_user.id)
             if default_loc:
                 lat = default_loc.latitude
                 lon = default_loc.longitude
@@ -57,7 +57,7 @@ async def get_current_weather(
             raise HTTPException(status_code=400, detail="Location required. Provide lat/lon.")
     
     # Get or create location
-    location = await db_service.get_or_create_location(
+    location = db_service.get_or_create_location(
         name=loc_name or f"{lat:.4f},{lon:.4f}",
         latitude=lat,
         longitude=lon,
@@ -92,7 +92,7 @@ async def get_current_weather(
         "raw_data": current,
     }
     
-    observation = await db_service.save_observation(obs_data)
+    observation = db_service.save_observation(obs_data)
     
     # Get forecast
     forecast_data = await weather_service.get_forecast(latitude, longitude, days=7)
@@ -127,10 +127,10 @@ async def get_current_weather(
                 "model": "ecmwf_ifs",
                 "raw_data": {k: v[i] if isinstance(v, list) else v for k, v in hourly.items()},
             }
-            forecasts.append(await db_service.save_forecast(fcst_data))
+            forecasts.append(db_service.save_forecast(fcst_data))
     
     # Get ML predictions
-    recent_obs = await db_service.get_recent_observations(location.id, hours=24)
+    recent_obs = db_service.get_recent_observations(location.id, hours=24)
     hist_data = [
         {
             "temperature": o.temperature,
@@ -176,10 +176,10 @@ async def get_current_weather(
                     "model_version": pred.get("model_version"),
                     "features_used": pred.get("features_used"),
                 }
-                await db_service.save_prediction(pred_data)
+                db_service.save_prediction(pred_data)
     
     # Get alerts
-    alerts = await db_service.get_active_alerts(location.id)
+    alerts = db_service.get_active_alerts(location.id)
     
     return CurrentWeatherResponse(
         location=LocationResponse.model_validate(location),
@@ -196,7 +196,7 @@ async def get_forecast(
     longitude: Optional[float] = Query(None, ge=-180, le=180),
     location_name: Optional[str] = None,
     days: int = Query(7, ge=1, le=14),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get weather forecast for a location. If lat/lon not provided, uses user's default location."""
@@ -209,7 +209,7 @@ async def get_forecast(
     
     if lat is None or lon is None:
         if current_user:
-            default_loc = await user_service.get_default_location(current_user.id)
+            default_loc = user_service.get_default_location(current_user.id)
             if default_loc:
                 lat = default_loc.latitude
                 lon = default_loc.longitude
@@ -219,7 +219,7 @@ async def get_forecast(
         else:
             raise HTTPException(status_code=400, detail="Location required. Provide lat/lon.")
     
-    location = await db_service.get_or_create_location(
+    location = db_service.get_or_create_location(
         name=loc_name or f"{lat:.4f},{lon:.4f}",
         latitude=lat,
         longitude=lon,
@@ -260,7 +260,7 @@ async def get_forecast(
             "source": "open-meteo",
             "model": "ecmwf_ifs",
         }
-        hourly_forecasts.append(await db_service.save_forecast(fcst_data))
+        hourly_forecasts.append(db_service.save_forecast(fcst_data))
     
     daily_forecasts = []
     daily_times = daily.get("time", [])
@@ -289,9 +289,9 @@ async def get_forecast(
             "source": "open-meteo",
             "model": "ecmwf_ifs",
         }
-        daily_forecasts.append(await db_service.save_forecast(fcst_data))
+        daily_forecasts.append(db_service.save_forecast(fcst_data))
     
-    alerts = await db_service.get_active_alerts(location.id)
+    alerts = db_service.get_active_alerts(location.id)
     
     return ForecastResponse(
         location=LocationResponse.model_validate(location),
@@ -307,7 +307,7 @@ async def get_historical_analysis(
     longitude: Optional[float] = Query(None, ge=-180, le=180),
     location_name: Optional[str] = None,
     years: int = Query(10, ge=1, le=30),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get historical weather analysis for a location. If lat/lon not provided, uses user's default location."""
@@ -320,7 +320,7 @@ async def get_historical_analysis(
     
     if lat is None or lon is None:
         if current_user:
-            default_loc = await user_service.get_default_location(current_user.id)
+            default_loc = user_service.get_default_location(current_user.id)
             if default_loc:
                 lat = default_loc.latitude
                 lon = default_loc.longitude
@@ -330,14 +330,14 @@ async def get_historical_analysis(
         else:
             raise HTTPException(status_code=400, detail="Location required. Provide lat/lon.")
     
-    location = await db_service.get_or_create_location(
+    location = db_service.get_or_create_location(
         name=loc_name or f"{lat:.4f},{lon:.4f}",
         latitude=lat,
         longitude=lon,
     )
     
     # Try to get from database first
-    stats = await db_service.get_historical_statistics(location.id, years)
+    stats = db_service.get_historical_statistics(location.id, years)
     
     # If not enough data, fetch from API
     if not stats:
@@ -368,13 +368,13 @@ async def get_historical_analysis(
                     "avg_wind_speed": daily.get("wind_speed_10m_max", [None])[i],
                     "source": "open-meteo-archive",
                 }
-                historical_records.append(await db_service.save_historical(hist_data))
+                historical_records.append(db_service.save_historical(hist_data))
             
             # Recalculate stats
-            stats = await db_service.get_historical_statistics(location.id, years)
+            stats = db_service.get_historical_statistics(location.id, years)
     
     # Get historical records for response
-    hist_records = await db_service.get_historical_range(
+    hist_records = db_service.get_historical_range(
         location.id,
         datetime.now().year - years,
         datetime.now().year
@@ -392,7 +392,7 @@ async def get_historical_analysis(
 async def get_alerts(
     latitude: Optional[float] = Query(None, ge=-90, le=90),
     longitude: Optional[float] = Query(None, ge=-180, le=180),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get active weather alerts for a location. If lat/lon not provided, uses user's default location."""
@@ -404,7 +404,7 @@ async def get_alerts(
     
     if lat is None or lon is None:
         if current_user:
-            default_loc = await user_service.get_default_location(current_user.id)
+            default_loc = user_service.get_default_location(current_user.id)
             if default_loc:
                 lat = default_loc.latitude
                 lon = default_loc.longitude
@@ -413,26 +413,26 @@ async def get_alerts(
         else:
             raise HTTPException(status_code=400, detail="Location required. Provide lat/lon.")
     
-    location = await db_service.get_or_create_location(
+    location = db_service.get_or_create_location(
         name=f"{lat:.4f},{lon:.4f}",
         latitude=lat,
         longitude=lon,
     )
     
-    alerts = await db_service.get_active_alerts(location.id)
+    alerts = db_service.get_active_alerts(location.id)
     return [WeatherAlertResponse.model_validate(a) for a in alerts]
 
 
 @router.get("/locations/search")
 async def search_locations(
     query: str = Query(..., min_length=2),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """Search for locations by name."""
     db_service = DatabaseService(db)
     
     # First search local database
-    locations = await db_service.search_locations(query)
+    locations = db_service.search_locations(query)
     
     if locations:
         return [LocationResponse.model_validate(loc) for loc in locations]
@@ -456,5 +456,5 @@ async def search_locations(
 
 
 @router.get("/health")
-async def health_check():
+def health_check():
     return {"status": "ok", "service": "weather"}

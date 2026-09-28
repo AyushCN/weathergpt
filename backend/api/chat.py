@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 import uuid
@@ -30,7 +30,7 @@ ml_service = MLService()
 @router.post("", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Process a chat message and return weather-aware response."""
@@ -42,10 +42,10 @@ async def chat(
     
     if current_user and session_id:
         user_service = UserService(db)
-        chat_session = await user_service.get_chat_session_by_session_id(current_user.id, session_id)
+        chat_session = user_service.get_chat_session_by_session_id(current_user.id, session_id)
         if not chat_session:
             # Create new session
-            chat_session = await user_service.create_chat_session(
+            chat_session = user_service.create_chat_session(
                 current_user.id, 
                 ChatSessionCreate(session_id=session_id)
             )
@@ -53,7 +53,7 @@ async def chat(
         # Create new session for authenticated user
         session_id = str(uuid.uuid4())
         user_service = UserService(db)
-        chat_session = await user_service.create_chat_session(
+        chat_session = user_service.create_chat_session(
             current_user.id,
             ChatSessionCreate(session_id=session_id)
         )
@@ -63,7 +63,7 @@ async def chat(
     db_service = DatabaseService(db)
     
     # Save user query
-    query = await db_service.save_query(
+    query = db_service.save_query(
         session_id=session_id,
         user_message=request.message,
         latitude=request.latitude,
@@ -75,7 +75,7 @@ async def chat(
     # Save chat message for authenticated users
     if current_user and chat_session:
         user_service = UserService(db)
-        await user_service.add_chat_message(
+        user_service.add_chat_message(
             chat_session.id,
             ChatMessageCreate(
                 role="user",
@@ -108,7 +108,7 @@ async def chat(
     if lat is None or lon is None:
         if current_user:
             user_service = UserService(db)
-            default_loc = await user_service.get_default_location(current_user.id)
+            default_loc = user_service.get_default_location(current_user.id)
             if default_loc:
                 lat = default_loc.latitude
                 lon = default_loc.longitude
@@ -123,7 +123,7 @@ async def chat(
             location_name = location_name or "Bangalore"
     
     # Get or create location
-    location = await db_service.get_or_create_location(
+    location = db_service.get_or_create_location(
         name=location_name or f"{lat:.4f},{lon:.4f}",
         latitude=lat,
         longitude=lon,
@@ -131,7 +131,7 @@ async def chat(
     
     # Update query with location
     query.location_id = location.id
-    await db_service.db.flush()
+    db_service.db.flush()
     
     # Fetch weather data based on intent
     weather_data = {}
@@ -158,7 +158,7 @@ async def chat(
             weather_data["historical"] = historical.get("daily", {})
     
     # Get alerts
-    alerts = await db_service.get_active_alerts(location.id)
+    alerts = db_service.get_active_alerts(location.id)
     
     # Get ML predictions
     if current:
@@ -175,7 +175,7 @@ async def chat(
         }
         
         # Get recent observations for historical features
-        recent_obs = await db_service.get_recent_observations(location.id, hours=24)
+        recent_obs = db_service.get_recent_observations(location.id, hours=24)
         hist_data = [
             {
                 "temperature": o.temperature,
@@ -206,7 +206,7 @@ async def chat(
     response_time_ms = int((datetime.now() - start_time).total_seconds() * 1000)
     
     # Update query with response
-    await db_service.update_query_response(
+    db_service.update_query_response(
         query_id=query.id,
         ai_response=response_text,
         intent=intent.value,
@@ -217,7 +217,7 @@ async def chat(
     # Save assistant response for authenticated users
     if current_user and chat_session:
         user_service = UserService(db)
-        await user_service.add_chat_message(
+        user_service.add_chat_message(
             chat_session.id,
             ChatMessageCreate(
                 role="assistant",
@@ -243,21 +243,21 @@ async def chat(
 
 
 @router.get("/history/{session_id}")
-async def get_chat_history(
+def get_chat_history(
     session_id: str,
     limit: int = 50,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get chat history for a session."""
     if current_user:
         # Get from user's chat sessions
         user_service = UserService(db)
-        chat_session = await user_service.get_chat_session_by_session_id(current_user.id, session_id)
+        chat_session = user_service.get_chat_session_by_session_id(current_user.id, session_id)
         if not chat_session:
             return []
         
-        messages = await user_service.get_chat_messages(chat_session.id, limit)
+        messages = user_service.get_chat_messages(chat_session.id, limit)
         return [
             {
                 "id": m.id,
@@ -282,7 +282,7 @@ async def get_chat_history(
             .order_by(desc(UserQuery.created_at))
             .limit(limit)
         )
-        result = await db_service.db.execute(stmt)
+        result = db_service.db.execute(stmt)
         queries = list(result.scalars().all())
         
         return [
@@ -299,14 +299,14 @@ async def get_chat_history(
 
 
 @router.get("/sessions", response_model=List[dict])
-async def get_user_chat_sessions(
+def get_user_chat_sessions(
     limit: int = 50,
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
     """Get all chat sessions for current user."""
     user_service = UserService(db)
-    sessions = await user_service.get_user_chat_sessions(current_user.id, limit)
+    sessions = user_service.get_user_chat_sessions(current_user.id, limit)
     return [
         {
             "id": s.id,

@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    DATABASE_URL: str = "postgresql+asyncpg://weathergpt:weathergpt@localhost:5432/weathergpt"
+    DATABASE_URL: str = "postgresql://weathergpt:weathergpt@127.0.0.1:5433/weathergpt"
     
     # Google Gemini
     GEMINI_API_KEY: str = ""

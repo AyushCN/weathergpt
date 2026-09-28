@@ -19,12 +19,6 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { formatTemperature, formatDateTime } from './utils/weather';
 import type { Location, CurrentWeatherResponse, HistoricalAnalysisResponse, WeatherForecast } from './types';
 import { weatherApi, chatApi } from './services/api';
-import { CurrentWeatherCard } from './components/CurrentWeatherCard';
-import { HourlyForecast } from './components/HourlyForecast';
-import { DailyForecast } from './components/DailyForecast';
-import { AlertsPanel } from './components/AlertsPanel';
-import { ChatInterface } from './components/ChatInterface';
-import { TemperatureChart, RainfallChart, MonthlyChart } from './components/Charts';
 import { PredictionsSummary, StatisticsSummary, StatCard } from './components/StatComponents';
 
 // Main App with Router
