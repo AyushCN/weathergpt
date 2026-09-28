@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 import uuid
 from backend.database import get_db
@@ -8,13 +8,16 @@ from backend.services.llm_service import LLMService
 from backend.services.weather_service import WeatherService, get_weather_description
 from backend.services.database_service import DatabaseService
 from backend.services.ml_service import MLService
+from backend.services.user_service import UserService
+from backend.api.deps import get_optional_user, get_current_active_user
 from backend.schemas import (
     ChatRequest,
     ChatResponse,
     IntentType,
     WeatherAlertResponse,
+    ChatSessionCreate, ChatMessageCreate,
 )
-from backend.models import Location, UserQuery
+from backend.models import Location, UserQuery, ChatSession, ChatMessage, User
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -28,10 +31,35 @@ ml_service = MLService()
 async def chat(
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Process a chat message and return weather-aware response."""
     start_time = datetime.now()
-    session_id = request.session_id or str(uuid.uuid4())
+    
+    # Handle session for authenticated users
+    session_id = request.session_id
+    chat_session = None
+    
+    if current_user and session_id:
+        user_service = UserService(db)
+        chat_session = await user_service.get_chat_session_by_session_id(current_user.id, session_id)
+        if not chat_session:
+            # Create new session
+            chat_session = await user_service.create_chat_session(
+                current_user.id, 
+                ChatSessionCreate(session_id=session_id)
+            )
+    elif current_user and not session_id:
+        # Create new session for authenticated user
+        session_id = str(uuid.uuid4())
+        user_service = UserService(db)
+        chat_session = await user_service.create_chat_session(
+            current_user.id,
+            ChatSessionCreate(session_id=session_id)
+        )
+    elif not current_user and not session_id:
+        session_id = str(uuid.uuid4())
+    
     db_service = DatabaseService(db)
     
     # Save user query
@@ -41,7 +69,19 @@ async def chat(
         latitude=request.latitude,
         longitude=request.longitude,
         language=request.language,
+        user_id=current_user.id if current_user else None,
     )
+    
+    # Save chat message for authenticated users
+    if current_user and chat_session:
+        user_service = UserService(db)
+        await user_service.add_chat_message(
+            chat_session.id,
+            ChatMessageCreate(
+                role="user",
+                content=request.message,
+            )
+        )
     
     # Extract intent and entities using LLM
     extracted = await llm_service.extract_intent_and_entities(
@@ -64,12 +104,23 @@ async def chat(
         lon = location_info["lon"]
         location_name = location_info.get("name", location_name)
     
-    # If no location provided, try to get from recent queries or use a default
+    # If no location provided, use user's default location or a default
     if lat is None or lon is None:
-        # For demo, use a default location (Bangalore)
-        lat = 12.9716
-        lon = 77.5946
-        location_name = location_name or "Bangalore"
+        if current_user:
+            user_service = UserService(db)
+            default_loc = await user_service.get_default_location(current_user.id)
+            if default_loc:
+                lat = default_loc.latitude
+                lon = default_loc.longitude
+                location_name = default_loc.location_name
+            else:
+                lat = 12.9716
+                lon = 77.5946
+                location_name = location_name or "Bangalore"
+        else:
+            lat = 12.9716
+            lon = 77.5946
+            location_name = location_name or "Bangalore"
     
     # Get or create location
     location = await db_service.get_or_create_location(
@@ -163,6 +214,22 @@ async def chat(
         response_time_ms=response_time_ms,
     )
     
+    # Save assistant response for authenticated users
+    if current_user and chat_session:
+        user_service = UserService(db)
+        await user_service.add_chat_message(
+            chat_session.id,
+            ChatMessageCreate(
+                role="assistant",
+                content=response_text,
+                weather_data=weather_data,
+                predictions=predictions,
+                alerts=[WeatherAlertResponse.model_validate(a).model_dump() for a in alerts],
+                intent=intent.value,
+                entities=extracted,
+            )
+        )
+    
     return ChatResponse(
         response=response_text,
         intent=intent,
@@ -180,28 +247,73 @@ async def get_chat_history(
     session_id: str,
     limit: int = 50,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user),
 ):
     """Get chat history for a session."""
-    db_service = DatabaseService(db)
-    
-    from sqlalchemy import select, desc
-    stmt = (
-        select(UserQuery)
-        .where(UserQuery.session_id == session_id)
-        .order_by(desc(UserQuery.created_at))
-        .limit(limit)
-    )
-    result = await db_service.db.execute(stmt)
-    queries = list(result.scalars().all())
-    
+    if current_user:
+        # Get from user's chat sessions
+        user_service = UserService(db)
+        chat_session = await user_service.get_chat_session_by_session_id(current_user.id, session_id)
+        if not chat_session:
+            return []
+        
+        messages = await user_service.get_chat_messages(chat_session.id, limit)
+        return [
+            {
+                "id": m.id,
+                "role": m.role,
+                "content": m.content,
+                "weather_data": m.weather_data,
+                "predictions": m.predictions,
+                "alerts": m.alerts,
+                "intent": m.intent,
+                "entities": m.entities,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in messages
+        ]
+    else:
+        # Fallback to old session-based history
+        db_service = DatabaseService(db)
+        from sqlalchemy import select, desc
+        stmt = (
+            select(UserQuery)
+            .where(UserQuery.session_id == session_id)
+            .order_by(desc(UserQuery.created_at))
+            .limit(limit)
+        )
+        result = await db_service.db.execute(stmt)
+        queries = list(result.scalars().all())
+        
+        return [
+            {
+                "id": q.id,
+                "user_message": q.user_message,
+                "ai_response": q.ai_response,
+                "intent": q.intent,
+                "entities": q.extracted_entities,
+                "created_at": q.created_at.isoformat(),
+            }
+            for q in reversed(queries)
+        ]
+
+
+@router.get("/sessions", response_model=List[dict])
+async def get_user_chat_sessions(
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Get all chat sessions for current user."""
+    user_service = UserService(db)
+    sessions = await user_service.get_user_chat_sessions(current_user.id, limit)
     return [
         {
-            "id": q.id,
-            "user_message": q.user_message,
-            "ai_response": q.ai_response,
-            "intent": q.intent,
-            "entities": q.extracted_entities,
-            "created_at": q.created_at.isoformat(),
+            "id": s.id,
+            "session_id": s.session_id,
+            "title": s.title,
+            "created_at": s.created_at.isoformat(),
+            "updated_at": s.updated_at.isoformat() if s.updated_at else None,
         }
-        for q in reversed(queries)
+        for s in sessions
     ]

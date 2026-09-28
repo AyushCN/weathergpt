@@ -177,3 +177,90 @@ export interface WeatherCodeInfo {
   description: string;
   icon: string;
 }
+
+// Authentication Types
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  is_active: boolean;
+  is_verified: boolean;
+  preferences: UserPreferences;
+  last_login_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface UserPreferences {
+  temperature_unit: 'c' | 'f';
+  wind_unit: 'kmh' | 'mph';
+  default_location_id?: number;
+  default_forecast_view: 'daily' | 'hourly';
+  notifications_enabled: boolean;
+  language: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  name: string;
+  password: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface UserLocation {
+  id: number;
+  user_id: number;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  country?: string;
+  state?: string;
+  district?: string;
+  timezone: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface UserLocationCreate {
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  country?: string;
+  state?: string;
+  district?: string;
+  timezone: string;
+  is_default: boolean;
+}
+
+export interface ChatSession {
+  id: number;
+  user_id: number;
+  session_id: string;
+  title?: string;
+  created_at: string;
+  updated_at?: string;
+  messages?: ChatMessage[];
+}
+
+export interface SearchHistory {
+  id: number;
+  user_id: number;
+  query: string;
+  location_name?: string;
+  latitude?: number;
+  longitude?: number;
+  created_at: string;
+}

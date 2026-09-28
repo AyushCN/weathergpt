@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from backend.config import settings
 from backend.database import init_db, engine
-from backend.api import weather, chat
+from backend.api import weather, chat, auth
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +39,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth.router)
 app.include_router(weather.router)
 app.include_router(chat.router)
 

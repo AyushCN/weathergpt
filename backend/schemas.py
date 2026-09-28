@@ -251,3 +251,176 @@ class HealthResponse(BaseModel):
     version: str
     database: str
     timestamp: datetime
+
+
+# Authentication Schemas
+class UserBase(BaseModel):
+    email: str = Field(..., pattern=r"^[^@]+@[^@]+\.[^@]+$")
+    name: str = Field(..., min_length=1, max_length=255)
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+class UserUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    email: Optional[str] = Field(None, pattern=r"^[^@]+@[^@]+\.[^@]+$")
+    preferences: Optional[Dict[str, Any]] = None
+
+
+class UserResponse(UserBase):
+    id: int
+    role: str
+    is_active: bool
+    is_verified: bool
+    preferences: Dict[str, Any]
+    last_login_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int
+
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+    email: Optional[str] = None
+
+
+class LoginRequest(BaseModel):
+    email: str = Field(..., pattern=r"^[^@]+@[^@]+\.[^@]+$")
+    password: str
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., pattern=r"^[^@]+@[^@]+\.[^@]+$")
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(..., min_length=8, max_length=128)
+
+
+# User Location Schemas
+class UserLocationBase(BaseModel):
+    location_name: str
+    latitude: float
+    longitude: float
+    country: Optional[str] = None
+    state: Optional[str] = None
+    district: Optional[str] = None
+    timezone: str = "UTC"
+    is_default: bool = False
+
+
+class UserLocationCreate(UserLocationBase):
+    pass
+
+
+class UserLocationUpdate(BaseModel):
+    location_name: Optional[str] = None
+    is_default: Optional[bool] = None
+
+
+class UserLocationResponse(UserLocationBase):
+    id: int
+    user_id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Chat Session Schemas
+class ChatSessionBase(BaseModel):
+    title: Optional[str] = None
+
+
+class ChatSessionCreate(ChatSessionBase):
+    session_id: str
+
+
+class ChatSessionUpdate(BaseModel):
+    title: Optional[str] = None
+
+
+class ChatSessionResponse(ChatSessionBase):
+    id: int
+    user_id: int
+    session_id: str
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ChatMessageBase(BaseModel):
+    role: str
+    content: str
+    weather_data: Optional[Dict[str, Any]] = None
+    predictions: Optional[Dict[str, Any]] = None
+    alerts: Optional[List[Dict[str, Any]]] = None
+    intent: Optional[str] = None
+    entities: Optional[Dict[str, Any]] = None
+
+
+class ChatMessageCreate(ChatMessageBase):
+    pass
+
+
+class ChatMessageResponse(ChatMessageBase):
+    id: int
+    session_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ChatSessionWithMessages(ChatSessionResponse):
+    messages: List[ChatMessageResponse] = []
+
+
+# Search History Schemas
+class SearchHistoryBase(BaseModel):
+    query: str
+    location_name: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class SearchHistoryCreate(SearchHistoryBase):
+    pass
+
+
+class SearchHistoryResponse(SearchHistoryBase):
+    id: int
+    user_id: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# User Preferences
+class UserPreferences(BaseModel):
+    temperature_unit: str = "c"  # c or f
+    wind_unit: str = "kmh"  # kmh or mph
+    default_location_id: Optional[int] = None
+    default_forecast_view: str = "daily"  # daily or hourly
+    notifications_enabled: bool = True
+    language: str = "en"

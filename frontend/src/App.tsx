@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { weatherApi, chatApi } from './services/api';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './hooks/useAuth';
+import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import { LocationSearch } from './components/LocationSearch';
 import { CurrentWeatherCard } from './components/CurrentWeatherCard';
 import { HourlyForecast } from './components/HourlyForecast';
@@ -9,17 +11,58 @@ import { DailyForecast } from './components/DailyForecast';
 import { AlertsPanel } from './components/AlertsPanel';
 import { ChatInterface } from './components/ChatInterface';
 import { TemperatureChart, RainfallChart, MonthlyChart } from './components/Charts';
+import { DashboardPage } from './pages/DashboardPage';
+import { LoginPage } from './pages/LoginPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
+import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { formatTemperature, formatDateTime } from './utils/weather';
 import type { Location, CurrentWeatherResponse, HistoricalAnalysisResponse, WeatherForecast } from './types';
+import { weatherApi, chatApi } from './services/api';
+import { CurrentWeatherCard } from './components/CurrentWeatherCard';
+import { HourlyForecast } from './components/HourlyForecast';
+import { DailyForecast } from './components/DailyForecast';
+import { AlertsPanel } from './components/AlertsPanel';
+import { ChatInterface } from './components/ChatInterface';
+import { TemperatureChart, RainfallChart, MonthlyChart } from './components/Charts';
+import { PredictionsSummary, StatisticsSummary, StatCard } from './components/StatComponents';
 
-function App() {
-  const [location, setLocation] = useState<Location | null>(null);
-  const [currentWeather, setCurrentWeather] = useState<CurrentWeatherResponse | null>(null);
-  const [forecast, setForecast] = useState<WeatherForecast[]>([]);
-  const [historical, setHistorical] = useState<HistoricalAnalysisResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'current' | 'forecast' | 'historical' | 'chat'>('current');
-  const [unit, setUnit] = useState<'c' | 'f'>('c');
+// Main App with Router
+function AppRouter() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
+          <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPasswordPage /></PublicRoute>} />
+          <Route path="/reset-password" element={<PublicRoute><ResetPasswordPage /></PublicRoute>} />
+          
+          {/* Protected Routes */}
+          <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          <Route path="/settings" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+          
+          {/* Main App (Public but enhanced with auth) */}
+          <Route path="/" element={<MainApp />} />
+          
+          {/* Redirects */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}
+
+// Main Weather App Component
+function MainApp() {
+  const [location, setLocation] = React.useState<Location | null>(null);
+  const [currentWeather, setCurrentWeather] = React.useState<CurrentWeatherResponse | null>(null);
+  const [forecast, setForecast] = React.useState<WeatherForecast[]>([]);
+  const [historical, setHistorical] = React.useState<HistoricalAnalysisResponse | null>(null);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<'current' | 'forecast' | 'historical' | 'chat'>('current');
+  const [unit, setUnit] = React.useState<'c' | 'f'>('c');
 
   // Default location (Bangalore)
   const defaultLocation: Location = {
@@ -36,7 +79,7 @@ function App() {
     created_at: new Date().toISOString(),
   };
 
-  const loadWeatherData = useCallback(async (loc: Location) => {
+  const loadWeatherData = React.useCallback(async (loc: Location) => {
     setIsLoading(true);
     try {
       const [current, forecastData, historicalData] = await Promise.all([
@@ -56,7 +99,7 @@ function App() {
   }, []);
 
   // Load default location on mount
-  useEffect(() => {
+  React.useEffect(() => {
     loadWeatherData(defaultLocation);
   }, [loadWeatherData]);
 
@@ -107,6 +150,8 @@ function App() {
               >
                 °F
               </button>
+              
+              <AuthNavLink />
             </div>
           </div>
         </div>
@@ -270,75 +315,41 @@ function App() {
   );
 }
 
-function PredictionsSummary({ predictions, unit }: { predictions: Record<string, any>; unit: 'c' | 'f' }) {
-  if (!predictions || Object.keys(predictions).length === 0) return null;
-
+// Auth Navigation Link Component
+function AuthNavLink() {
+  const { isAuthenticated, isLoading, user, logout } = React.useContext(
+    require('./hooks/useAuth').AuthContext
+  );
+  
+  if (isLoading) {
+    return <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />;
+  }
+  
+  if (isAuthenticated) {
+    return (
+      <div className="flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-weather-100 flex items-center justify-center">
+          <span className="text-sm font-medium text-weather-700">
+            {user?.name?.charAt(0).toUpperCase() || 'U'}
+          </span>
+        </div>
+        <span className="hidden sm:block text-sm font-medium text-gray-700">{user?.name}</span>
+        <button 
+          onClick={logout}
+          className="btn-ghost text-sm"
+        >
+          Logout
+        </button>
+      </div>
+    );
+  }
+  
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-      {Object.entries(predictions).map(([key, value]) => {
-        if (key === 'generated_at') return null;
-        return (
-          <div key={key} className="p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-medium text-gray-700 capitalize mb-2">{key} Forecast</h4>
-            {value.temperature && (
-              <div className="space-y-1 text-sm">
-                {Object.entries(value.temperature).slice(0, 3).map(([horizon, pred]: any) => (
-                  <div key={horizon} className="flex justify-between">
-                    <span className="text-gray-500">{horizon}</span>
-                    <span className="font-medium">
-                      {formatTemperature(pred.predicted_value, unit)} ({Math.round(pred.confidence * 100)}%)
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-            {value.rain && (
-              <div className="space-y-1 text-sm mt-2">
-                {Object.entries(value.rain).slice(0, 3).map(([horizon, pred]: any) => (
-                  <div key={horizon} className="flex justify-between">
-                    <span className="text-gray-500">{horizon}</span>
-                    <span className="font-medium text-blue-600">
-                      {Math.round(pred.probability * 100)}% chance
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        );
-      })}
+    <div className="flex items-center gap-2">
+      <a href="/login" className="btn-ghost text-sm">Sign in</a>
+      <a href="/register" className="btn-primary text-sm">Get Started</a>
     </div>
   );
 }
 
-function StatisticsSummary({ stats }: { stats: Record<string, any> }) {
-  if (!stats.temperature && !stats.rainfall) return null;
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      {stats.temperature && (
-        <>
-          <StatCard label="Avg Temperature" value={`${stats.temperature.mean?.toFixed(1) || '—'}°C`} />
-          <StatCard label="Temperature Range" value={`${stats.temperature.min?.toFixed(1) || '—'}°C - ${stats.temperature.max?.toFixed(1) || '—'}°C`} />
-        </>
-      )}
-      {stats.rainfall && (
-        <>
-          <StatCard label="Avg Annual Rainfall" value={`${stats.rainfall.mean?.toFixed(0) || '—'} mm`} />
-          <StatCard label="Max Annual Rainfall" value={`${stats.rainfall.max?.toFixed(0) || '—'} mm`} />
-        </>
-      )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="p-4 bg-gray-50 rounded-lg">
-      <p className="text-sm text-gray-500">{label}</p>
-      <p className="text-xl font-bold text-gray-900 mt-1">{value}</p>
-    </div>
-  );
-}
-
-export default App;
+export default AppRouter;
