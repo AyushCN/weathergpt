@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
 
-from backend.models import (
+from .models import (
     Location,
     WeatherObservation,
     WeatherForecast,
@@ -13,7 +13,7 @@ from backend.models import (
     UserQuery,
     HistoricalWeather,
 )
-from backend.schemas import (
+from .schemas import (
     LocationCreate,
     WeatherObservationCreate,
     WeatherForecastCreate,

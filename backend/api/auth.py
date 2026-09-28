@@ -2,11 +2,11 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
-from backend.database import get_db
-from backend.services.auth_service import AuthService
-from backend.services.user_service import UserService
-from backend.api.deps import get_current_active_user, get_optional_user
-from backend.schemas import (
+from .database import get_db
+from .services.auth_service import AuthService
+from .services.user_service import UserService
+from .api.deps import get_current_active_user, get_optional_user
+from .schemas import (
     UserCreate, UserUpdate, UserResponse,
     LoginRequest, Token, RefreshTokenRequest,
     ForgotPasswordRequest, ResetPasswordRequest,
@@ -15,7 +15,7 @@ from backend.schemas import (
     ChatSessionWithMessages, ChatMessageCreate, ChatMessageResponse,
     SearchHistoryResponse, UserPreferences,
 )
-from backend.models import User
+from .models import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 

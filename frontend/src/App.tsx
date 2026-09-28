@@ -1,8 +1,6 @@
-'use client';
-
 import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider } from './hooks/useAuth';
+import { AuthProvider, AuthContext } from './hooks/useAuth';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import { LocationSearch } from './components/LocationSearch';
 import { CurrentWeatherCard } from './components/CurrentWeatherCard';
@@ -311,9 +309,7 @@ function MainApp() {
 
 // Auth Navigation Link Component
 function AuthNavLink() {
-  const { isAuthenticated, isLoading, user, logout } = React.useContext(
-    require('./hooks/useAuth').AuthContext
-  );
+  const { isAuthenticated, isLoading, user, logout } = React.useContext(AuthContext);
   
   if (isLoading) {
     return <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />;

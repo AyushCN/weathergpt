@@ -3,8 +3,8 @@ import json
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from backend.config import settings
-from backend.schemas import IntentType
+from .config import settings
+from .schemas import IntentType
 
 logger = logging.getLogger(__name__)
 

@@ -3,10 +3,10 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import Session
 
-from backend.models import (
+from .models import (
     User, UserLocation, ChatSession, ChatMessage, SearchHistory
 )
-from backend.schemas import (
+from .schemas import (
     UserLocationCreate, UserLocationUpdate,
     ChatSessionCreate, ChatSessionUpdate,
     ChatMessageCreate, SearchHistoryCreate
@@ -231,7 +231,7 @@ class UserService:
     # User Preferences
     def get_user_preferences(self, user_id: int) -> Dict[str, Any]:
         """Get user preferences with defaults."""
-        from backend.schemas import UserPreferences
+        from .schemas import UserPreferences
         user = self.db.get(User, user_id)
         if not user:
             return UserPreferences().model_dump()
