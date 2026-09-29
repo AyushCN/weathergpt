@@ -77,4 +77,4 @@ build/
 .coverage
 .htmlcov/
 .tox/
-.pytest_cache/
+.pytest_cache/venv312/
