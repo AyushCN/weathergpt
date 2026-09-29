@@ -3,21 +3,21 @@ from sqlalchemy.orm import Session
 from typing import Optional, List
 from datetime import datetime
 import uuid
-from .database import get_db
-from .services.llm_service import LLMService
-from .services.weather_service import WeatherService, get_weather_description
-from .services.database_service import DatabaseService
-from .services.ml_service import MLService
-from .services.user_service import UserService
-from .api.deps import get_optional_user, get_current_active_user
-from .schemas import (
+from backend.database import get_db
+from backend.services.llm_service import LLMService
+from backend.services.weather_service import WeatherService, get_weather_description
+from backend.services.database_service import DatabaseService
+from backend.services.ml_service import MLService
+from backend.services.user_service import UserService
+from backend.api.deps import get_optional_user, get_current_active_user
+from backend.schemas import (
     ChatRequest,
     ChatResponse,
     IntentType,
     WeatherAlertResponse,
     ChatSessionCreate, ChatMessageCreate,
 )
-from .models import Location, UserQuery, ChatSession, ChatMessage, User
+from backend.models import Location, UserQuery, ChatSession, ChatMessage, User
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

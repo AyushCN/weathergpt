@@ -1,22 +1,23 @@
-import google.generativeai as genai
 import json
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
-from .config import settings
-from .schemas import IntentType
+from groq import AsyncGroq
+from backend.config import settings
+from backend.schemas import IntentType
 
 logger = logging.getLogger(__name__)
 
 
 class LLMService:
     def __init__(self):
-        if settings.GEMINI_API_KEY:
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            self.model = genai.GenerativeModel(settings.GEMINI_MODEL)
+        if settings.GROQ_API_KEY:
+            self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            self.model = settings.GROQ_MODEL
         else:
+            self.client = None
             self.model = None
-            logger.warning("Gemini API key not configured")
+            logger.warning("Groq API key not configured")
 
     async def extract_intent_and_entities(
         self,
@@ -25,7 +26,7 @@ class LLMService:
     ) -> Dict[str, Any]:
         """Extract intent, location, time, and other entities from user message."""
         
-        if not self.model:
+        if not self.client:
             return self._fallback_extract(user_message)
         
         system_prompt = f"""You are a weather query understanding system. Analyze the user's message and extract:
@@ -60,12 +61,18 @@ Respond in JSON format:
 }}"""
 
         try:
-            response = await self.model.generate_content_async(
-                f"{system_prompt}\n\nUser message: {user_message}\n\nLanguage: {language}"
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": f"User message: {user_message}\n\nLanguage: {language}"}
+                ],
+                temperature=0.1,
+                max_tokens=500,
+                response_format={"type": "json_object"}
             )
             
-            # Parse JSON response
-            text = response.text.strip()
+            text = response.choices[0].message.content.strip()
             if text.startswith("```json"):
                 text = text[7:-3].strip()
             elif text.startswith("```"):
@@ -148,7 +155,7 @@ Respond in JSON format:
     ) -> str:
         """Generate natural language weather response using weather data."""
         
-        if not self.model:
+        if not self.client:
             return self._fallback_response(user_message, weather_data, intent)
         
         system_prompt = f"""You are WeatherGPT, a friendly and knowledgeable weather assistant. 
@@ -175,8 +182,16 @@ Alerts: {json.dumps(alerts, default=str) if alerts else 'None'}
 Provide a natural language response:"""
 
         try:
-            response = await self.model.generate_content_async(system_prompt)
-            return response.text.strip()
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                temperature=0.3,
+                max_tokens=800
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"LLM response generation error: {e}")
             return self._fallback_response(user_message, weather_data, intent)
@@ -233,7 +248,7 @@ Provide a natural language response:"""
     ) -> str:
         """Generate weather-based advisory."""
         
-        if not self.model:
+        if not self.client:
             return self._fallback_advisory(weather_data, alerts)
         
         system_prompt = f"""You are WeatherGPT providing practical weather advisories.
@@ -247,8 +262,16 @@ User context: {json.dumps(user_context, default=str) if user_context else 'None'
 Provide practical advice (carry umbrella, avoid travel, irrigation timing, etc.) in {language}:"""
 
         try:
-            response = await self.model.generate_content_async(system_prompt)
-            return response.text.strip()
+            response = await self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "Generate weather advisory"}
+                ],
+                temperature=0.3,
+                max_tokens=500
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"LLM advisory error: {e}")
             return self._fallback_advisory(weather_data, alerts)

@@ -2,11 +2,11 @@ from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 
-from .database import get_db
-from .services.auth_service import AuthService
-from .services.user_service import UserService
-from .api.deps import get_current_active_user, get_optional_user
-from .schemas import (
+from backend.database import get_db
+from backend.services.auth_service import AuthService
+from backend.services.user_service import UserService
+from backend.api.deps import get_current_active_user, get_optional_user
+from backend.schemas import (
     UserCreate, UserUpdate, UserResponse,
     LoginRequest, Token, RefreshTokenRequest,
     ForgotPasswordRequest, ResetPasswordRequest,
@@ -15,7 +15,7 @@ from .schemas import (
     ChatSessionWithMessages, ChatMessageCreate, ChatMessageResponse,
     SearchHistoryResponse, UserPreferences,
 )
-from .models import User
+from backend.models import User
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 
@@ -29,8 +29,11 @@ def register(
     auth_service = AuthService(db)
     try:
         user = auth_service.create_user(user_data)
+        db.commit()
+        db.refresh(user)
         return user
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 

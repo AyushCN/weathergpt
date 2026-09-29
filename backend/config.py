@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql://weathergpt:weathergpt@127.0.0.1:5433/weathergpt"
     
-    # Google Gemini
-    GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-1.5-flash"
+    # Groq API
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     # Weather APIs
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"

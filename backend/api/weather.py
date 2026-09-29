@@ -2,13 +2,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
-from .database import get_db
-from .services.weather_service import WeatherService, get_weather_description
-from .services.database_service import DatabaseService
-from .services.ml_service import MLService
-from .services.user_service import UserService
-from .api.deps import get_optional_user
-from .schemas import (
+from backend.database import get_db
+from backend.services.weather_service import WeatherService, get_weather_description
+from backend.services.database_service import DatabaseService
+from backend.services.ml_service import MLService
+from backend.services.user_service import UserService
+from backend.api.deps import get_optional_user
+from backend.schemas import (
     CurrentWeatherResponse,
     ForecastResponse,
     LocationResponse,
@@ -18,7 +18,7 @@ from .schemas import (
     WeatherPredictionResponse,
     HistoricalAnalysisResponse,
 )
-from .models import Location, WeatherObservation, WeatherForecast, WeatherAlert, WeatherPrediction, User
+from backend.models import Location, WeatherObservation, WeatherForecast, WeatherAlert, WeatherPrediction, User
 
 router = APIRouter(prefix="/weather", tags=["weather"])
 

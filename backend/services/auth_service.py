@@ -5,9 +5,9 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .config import settings
-from .models import User, UserRole
-from .schemas import UserCreate, UserUpdate, TokenData, UserPreferences
+from backend.config import settings
+from backend.models import User, UserRole
+from backend.schemas import UserCreate, UserUpdate, TokenData, UserPreferences
 
 # Password hashing
 pwd_context = CryptContext(

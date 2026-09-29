@@ -1,9 +1,9 @@
-from .services.weather_service import WeatherService, IMDAlertService, get_weather_description, determine_alert_severity
-from .services.llm_service import LLMService
-from .services.ml_service import MLService, ModelTrainer
-from .services.database_service import DatabaseService
-from .services.auth_service import AuthService
-from .services.user_service import UserService
+from .weather_service import WeatherService, IMDAlertService, get_weather_description, determine_alert_severity
+from .llm_service import LLMService
+from .ml_service import MLService, ModelTrainer
+from .database_service import DatabaseService
+from .auth_service import AuthService
+from .user_service import UserService
 
 __all__ = [
     "WeatherService",

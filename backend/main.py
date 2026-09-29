@@ -1,8 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .config import settings
-from .database import init_db, engine
-from .api import weather, chat, auth
+from config import settings
+from backend.database import init_db, engine
+from backend.api import weather, chat, auth
 import logging
 
 logging.basicConfig(level=logging.INFO)

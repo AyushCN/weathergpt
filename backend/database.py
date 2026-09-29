@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from typing import Generator
-from .config import settings
+from config import settings
 
 
 class Base(DeclarativeBase):
@@ -33,7 +33,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def init_db():
-    from .models import (
+    from backend.models import (
         Location,
         WeatherObservation,
         WeatherForecast,

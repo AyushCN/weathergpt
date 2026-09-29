@@ -4,7 +4,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
 
-from .models import (
+from backend.models import (
     Location,
     WeatherObservation,
     WeatherForecast,
@@ -13,7 +13,7 @@ from .models import (
     UserQuery,
     HistoricalWeather,
 )
-from .schemas import (
+from backend.schemas import (
     LocationCreate,
     WeatherObservationCreate,
     WeatherForecastCreate,
@@ -76,7 +76,9 @@ class DatabaseService:
         return list(result.scalars().all())
 
     # Weather Observation operations
-    def save_observation(self, obs: WeatherObservationCreate) -> WeatherObservation:
+    def save_observation(self, obs: WeatherObservationCreate | dict) -> WeatherObservation:
+        if isinstance(obs, dict):
+            obs = WeatherObservationCreate(**obs)
         db_obs = WeatherObservation(**obs.model_dump())
         self.db.add(db_obs)
         self.db.flush()
@@ -121,14 +123,16 @@ class DatabaseService:
         return self.get_observations_range(location_id, start, datetime.utcnow())
 
     # Weather Forecast operations
-    def save_forecast(self, forecast: WeatherForecastCreate) -> WeatherForecast:
+    def save_forecast(self, forecast: WeatherForecastCreate | dict) -> WeatherForecast:
+        if isinstance(forecast, dict):
+            forecast = WeatherForecastCreate(**forecast)
         db_fcst = WeatherForecast(**forecast.model_dump())
         self.db.add(db_fcst)
         self.db.flush()
         return db_fcst
 
-    def bulk_save_forecasts(self, forecasts: List[WeatherForecastCreate]) -> List[WeatherForecast]:
-        db_fcsts = [WeatherForecast(**f.model_dump()) for f in forecasts]
+    def bulk_save_forecasts(self, forecasts: List[WeatherForecastCreate | dict]) -> List[WeatherForecast]:
+        db_fcsts = [WeatherForecast(**f.model_dump()) if not isinstance(f, dict) else WeatherForecast(**WeatherForecastCreate(**f).model_dump()) for f in forecasts]
         self.db.add_all(db_fcsts)
         self.db.flush()
         return db_fcsts
@@ -164,14 +168,16 @@ class DatabaseService:
         return result.scalar_one_or_none()
 
     # Weather Prediction operations
-    def save_prediction(self, pred: WeatherPredictionCreate) -> WeatherPrediction:
+    def save_prediction(self, pred: WeatherPredictionCreate | dict) -> WeatherPrediction:
+        if isinstance(pred, dict):
+            pred = WeatherPredictionCreate(**pred)
         db_pred = WeatherPrediction(**pred.model_dump())
         self.db.add(db_pred)
         self.db.flush()
         return db_pred
 
-    def bulk_save_predictions(self, predictions: List[WeatherPredictionCreate]) -> List[WeatherPrediction]:
-        db_preds = [WeatherPrediction(**p.model_dump()) for p in predictions]
+    def bulk_save_predictions(self, predictions: List[WeatherPredictionCreate | dict]) -> List[WeatherPrediction]:
+        db_preds = [WeatherPrediction(**p.model_dump()) if not isinstance(p, dict) else WeatherPrediction(**WeatherPredictionCreate(**p).model_dump()) for p in predictions]
         self.db.add_all(db_preds)
         self.db.flush()
         return db_preds
@@ -199,7 +205,9 @@ class DatabaseService:
         return list(result.scalars().all())
 
     # Weather Alert operations
-    def save_alert(self, alert: WeatherAlertCreate) -> WeatherAlert:
+    def save_alert(self, alert: WeatherAlertCreate | dict) -> WeatherAlert:
+        if isinstance(alert, dict):
+            alert = WeatherAlertCreate(**alert)
         # Check if similar alert already exists
         stmt = select(WeatherAlert).where(
             and_(
@@ -224,7 +232,7 @@ class DatabaseService:
         self.db.flush()
         return db_alert
 
-    def bulk_save_alerts(self, alerts: List[WeatherAlertCreate]) -> List[WeatherAlert]:
+    def bulk_save_alerts(self, alerts: List[WeatherAlertCreate | dict]) -> List[WeatherAlert]:
         saved = []
         for alert in alerts:
             saved.append(self.save_alert(alert))
@@ -296,14 +304,16 @@ class DatabaseService:
         return query
 
     # Historical Weather operations
-    def save_historical(self, hist: HistoricalWeatherCreate) -> HistoricalWeather:
+    def save_historical(self, hist: HistoricalWeatherCreate | dict) -> HistoricalWeather:
+        if isinstance(hist, dict):
+            hist = HistoricalWeatherCreate(**hist)
         db_hist = HistoricalWeather(**hist.model_dump())
         self.db.add(db_hist)
         self.db.flush()
         return db_hist
 
-    def bulk_save_historical(self, historical: List[HistoricalWeatherCreate]) -> List[HistoricalWeather]:
-        db_hists = [HistoricalWeather(**h.model_dump()) for h in historical]
+    def bulk_save_historical(self, historical: List[HistoricalWeatherCreate | dict]) -> List[HistoricalWeather]:
+        db_hists = [HistoricalWeather(**h.model_dump()) if not isinstance(h, dict) else HistoricalWeather(**HistoricalWeatherCreate(**h).model_dump()) for h in historical]
         self.db.add_all(db_hists)
         self.db.flush()
         return db_hists

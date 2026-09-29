@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 import logging
-from .config import settings
+from backend.config import settings
 
 logger = logging.getLogger(__name__)
 
