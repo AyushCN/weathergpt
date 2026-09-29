@@ -1,0 +1,165 @@
+version: '3.8'
+
+services:
+  # Database - MariaDB
+  db:
+    image: mariadb:10.11
+    container_name: weathergpt-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-weathergpt}
+      MYSQL_USER: ${DB_USER:-weathergpt}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-weathergpt}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: weathergpt-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  # Local LLM - Ollama
+  ollama:
+    image: ollama/ollama:latest
+    container_name: weathergpt-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+    # Uncomment below if you have NVIDIA GPU
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: weathergpt-backend
+    environment:
+      # Database
+      DATABASE_URL: mysql+pymysql://${DB_USER:-weathergpt}:${DB_PASSWORD:-weathergpt}@db:3306/${DB_NAME:-weathergpt}
+      
+      # Redis Cache
+      REDIS_URL: redis://redis:6379
+      
+      # Local LLM (Ollama)
+      LLM_PRIMARY_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      LLM_FALLBACK_PROVIDERS: keyword
+      LLM_AUTO_SELECT: "true"
+      
+      # Groq (optional - leave empty for offline)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.3-70b-versatile}
+      
+      # App Config
+      SECRET_KEY: ${SECRET_KEY:-your-super-secret-key-change-in-production-min-32-chars}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      REFRESH_TOKEN_EXPIRE_DAYS: 7
+      
+      # Weather API (cached via Redis)
+      OPEN_METEO_BASE_URL: https://api.open-meteo.com/v1
+      OPEN_METEO_GEOCODING_URL: https://geocoding-api.open-meteo.com/v1
+      
+      # ML Models
+      MODEL_DIR: ./ml/trained_models
+      TEMPERATURE_MODEL_PATH: temperature_model.pkl
+      RAIN_MODEL_PATH: rain_model.pkl
+      
+      # Debug
+      DEBUG: "false"
+      HOST: 0.0.0.0
+      PORT: 8000
+      
+      # CORS
+      CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost"]'
+      
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./backend:/app/backend  # For development hot-reload
+      - ./ml/trained_models:/app/ml/trained_models:ro
+
+  # Frontend (Vite Dev Server for development)
+  frontend-dev:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: weathergpt-frontend-dev
+    environment:
+      VITE_API_URL: http://localhost:8000/api
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    restart: unless-stopped
+
+  # Frontend (Production - Nginx)
+  frontend-prod:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: weathergpt-frontend-prod
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  redis_data:
+  ollama_data:
+
+networks:
+  default:
+    name: weathergpt-network

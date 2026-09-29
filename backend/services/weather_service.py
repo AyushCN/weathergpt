@@ -8,11 +8,86 @@ from backend.config import settings
 logger = logging.getLogger(__name__)
 
 
+class WeatherServiceError(Exception):
+    """Custom exception for weather service errors."""
+    def __init__(self, message: str, status_code: int = 500, retry_after: Optional[int] = None):
+        self.message = message
+        self.status_code = status_code
+        self.retry_after = retry_after
+        super().__init__(message)
+
+
 class WeatherService:
     def __init__(self):
         self.base_url = settings.OPEN_METEO_BASE_URL
         self.geocoding_url = settings.OPEN_METEO_GEOCODING_URL
         self.client = httpx.AsyncClient(timeout=30.0)
+        self._rate_limit_until = 0
+
+    async def close(self):
+        await self.client.aclose()
+
+    async def _handle_response(self, response: httpx.Response) -> Dict[str, Any]:
+        """Handle HTTP response with proper error handling."""
+        if response.status_code == 429:
+            retry_after = int(response.headers.get("Retry-After", "60"))
+            self._rate_limit_until = asyncio.get_event_loop().time() + retry_after
+            raise WeatherServiceError(
+                "Rate limited by Open-Meteo API",
+                status_code=429,
+                retry_after=retry_after
+            )
+        elif response.status_code >= 500:
+            raise WeatherServiceError(
+                f"Open-Meteo API server error: {response.status_code}",
+                status_code=response.status_code
+            )
+        elif response.status_code >= 400:
+            raise WeatherServiceError(
+                f"Open-Meteo API client error: {response.status_code}",
+                status_code=response.status_code
+            )
+        
+        response.raise_for_status()
+        return response.json()
+
+    async def _make_request(self, url: str, params: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Make HTTP request with retry logic."""
+        # Check rate limit
+        now = asyncio.get_event_loop().time()
+        if now < self._rate_limit_until:
+            wait_time = self._rate_limit_until - now
+            logger.warning(f"Rate limited, waiting {wait_time:.1f}s")
+            await asyncio.sleep(wait_time)
+        
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                response = await self.client.get(url, params=params)
+                return await self._handle_response(response)
+            except WeatherServiceError as e:
+                if e.status_code == 429:
+                    if attempt < max_retries - 1:
+                        wait_time = e.retry_after or (2 ** attempt)
+                        logger.warning(f"Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        await asyncio.sleep(wait_time)
+                        continue
+                raise
+            except httpx.TimeoutException:
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt
+                    logger.warning(f"Timeout, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                    continue
+                raise WeatherServiceError("Request timeout", status_code=504)
+            except httpx.RequestError as e:
+                logger.error(f"Request error: {e}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise WeatherServiceError(f"Request failed: {str(e)}", status_code=502)
+        
+        return None
 
     async def close(self):
         await self.client.aclose()
@@ -20,13 +95,14 @@ class WeatherService:
     async def geocode(self, query: str) -> List[Dict[str, Any]]:
         """Search for locations by name."""
         try:
-            response = await self.client.get(
+            data = await self._make_request(
                 f"{self.geocoding_url}/search",
                 params={"name": query, "count": 10, "language": "en", "format": "json"}
             )
-            response.raise_for_status()
-            data = response.json()
-            return data.get("results", [])
+            return data.get("results", []) if data else []
+        except WeatherServiceError as e:
+            logger.error(f"Geocoding error: {e.message} (status: {e.status_code})")
+            return []
         except Exception as e:
             logger.error(f"Geocoding error: {e}")
             return []
@@ -34,14 +110,15 @@ class WeatherService:
     async def reverse_geocode(self, latitude: float, longitude: float) -> Optional[Dict[str, Any]]:
         """Get location name from coordinates."""
         try:
-            response = await self.client.get(
+            data = await self._make_request(
                 f"{self.geocoding_url}/reverse",
                 params={"latitude": latitude, "longitude": longitude, "language": "en", "format": "json"}
             )
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("results", [])
+            results = data.get("results", []) if data else []
             return results[0] if results else None
+        except WeatherServiceError as e:
+            logger.error(f"Reverse geocoding error: {e.message} (status: {e.status_code})")
+            return None
         except Exception as e:
             logger.error(f"Reverse geocoding error: {e}")
             return None
@@ -54,7 +131,7 @@ class WeatherService:
     ) -> Optional[Dict[str, Any]]:
         """Get current weather from Open-Meteo."""
         try:
-            response = await self.client.get(
+            return await self._make_request(
                 f"{self.base_url}/forecast",
                 params={
                     "latitude": latitude,
@@ -64,11 +141,12 @@ class WeatherService:
                     "forecast_days": 1,
                 }
             )
-            response.raise_for_status()
-            return response.json()
+        except WeatherServiceError as e:
+            logger.error(f"Current weather error: {e.message} (status: {e.status_code})")
+            raise
         except Exception as e:
             logger.error(f"Current weather error: {e}")
-            return None
+            raise WeatherServiceError(f"Current weather request failed: {str(e)}", status_code=502)
 
     async def get_forecast(
         self,
@@ -80,7 +158,7 @@ class WeatherService:
     ) -> Optional[Dict[str, Any]]:
         """Get weather forecast from Open-Meteo."""
         try:
-            response = await self.client.get(
+            return await self._make_request(
                 f"{self.base_url}/forecast",
                 params={
                     "latitude": latitude,
@@ -92,11 +170,12 @@ class WeatherService:
                     "past_days": 0,
                 }
             )
-            response.raise_for_status()
-            return response.json()
+        except WeatherServiceError as e:
+            logger.error(f"Forecast error: {e.message} (status: {e.status_code})")
+            raise
         except Exception as e:
             logger.error(f"Forecast error: {e}")
-            return None
+            raise WeatherServiceError(f"Forecast request failed: {str(e)}", status_code=502)
 
     async def get_historical_weather(
         self,
@@ -108,7 +187,7 @@ class WeatherService:
     ) -> Optional[Dict[str, Any]]:
         """Get historical weather from Open-Meteo Archive API."""
         try:
-            response = await self.client.get(
+            return await self._make_request(
                 "https://archive-api.open-meteo.com/v1/archive",
                 params={
                     "latitude": latitude,
@@ -119,11 +198,12 @@ class WeatherService:
                     "timezone": timezone,
                 }
             )
-            response.raise_for_status()
-            return response.json()
+        except WeatherServiceError as e:
+            logger.error(f"Historical weather error: {e.message} (status: {e.status_code})")
+            raise
         except Exception as e:
             logger.error(f"Historical weather error: {e}")
-            return None
+            raise WeatherServiceError(f"Historical weather request failed: {str(e)}", status_code=502)
 
     async def get_climate_normals(
         self,
@@ -135,7 +215,7 @@ class WeatherService:
     ) -> Optional[Dict[str, Any]]:
         """Get climate normals from Open-Meteo Climate API."""
         try:
-            response = await self.client.get(
+            return await self._make_request(
                 "https://climate-api.open-meteo.com/v1/climate",
                 params={
                     "latitude": latitude,
@@ -146,11 +226,12 @@ class WeatherService:
                     "timezone": timezone,
                 }
             )
-            response.raise_for_status()
-            return response.json()
+        except WeatherServiceError as e:
+            logger.error(f"Climate normals error: {e.message} (status: {e.status_code})")
+            raise
         except Exception as e:
             logger.error(f"Climate normals error: {e}")
-            return None
+            raise WeatherServiceError(f"Climate normals request failed: {str(e)}", status_code=502)
 
 
 class IMDAlertService:

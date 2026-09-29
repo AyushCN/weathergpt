@@ -7,3 +7,4 @@ export { LocationSearch } from './LocationSearch';
 export { TemperatureChart, RainfallChart, MonthlyChart } from './Charts';
 export { PredictionsSummary, StatisticsSummary, StatCard } from './StatComponents';
 export { ProtectedRoute, PublicRoute } from './ProtectedRoute';
+export { PWAInstallPrompt } from './PWAInstallPrompt';

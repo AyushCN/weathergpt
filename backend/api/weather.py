@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 from backend.database import get_db
-from backend.services.weather_service import WeatherService, get_weather_description
+from backend.services.weather_service import WeatherService, WeatherServiceError, get_weather_description
 from backend.services.database_service import DatabaseService
 from backend.services.ml_service import MLService
 from backend.services.user_service import UserService
@@ -65,7 +65,12 @@ async def get_current_weather(
     )
     
     # Fetch from API
-    weather_data = await weather_service.get_current_weather(latitude, longitude)
+    try:
+        weather_data = await weather_service.get_current_weather(latitude, longitude)
+    except WeatherServiceError as e:
+        if e.status_code == 429:
+            raise HTTPException(status_code=429, detail=f"Rate limited: {e.message}. Retry after {e.retry_after}s")
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     
     if not weather_data:
         raise HTTPException(status_code=503, detail="Weather service unavailable")
@@ -96,7 +101,13 @@ async def get_current_weather(
     observation = db_service.save_observation(obs_data)
     
     # Get forecast
-    forecast_data = await weather_service.get_forecast(latitude, longitude, days=7)
+    try:
+        forecast_data = await weather_service.get_forecast(latitude, longitude, days=7)
+    except WeatherServiceError as e:
+        if e.status_code == 429:
+            raise HTTPException(status_code=429, detail=f"Rate limited: {e.message}. Retry after {e.retry_after}s")
+        raise HTTPException(status_code=e.status_code, detail=e.message)
+    
     forecasts = []
     
     if forecast_data:
@@ -226,7 +237,12 @@ async def get_forecast(
         longitude=lon,
     )
     
-    forecast_data = await weather_service.get_forecast(latitude, longitude, days=days)
+    try:
+        forecast_data = await weather_service.get_forecast(latitude, longitude, days=days)
+    except WeatherServiceError as e:
+        if e.status_code == 429:
+            raise HTTPException(status_code=429, detail=f"Rate limited: {e.message}. Retry after {e.retry_after}s")
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     
     if not forecast_data:
         raise HTTPException(status_code=503, detail="Weather service unavailable")
@@ -345,9 +361,14 @@ async def get_historical_analysis(
         end_date = datetime.now().strftime("%Y-%m-%d")
         start_date = (datetime.now() - timedelta(days=years * 365)).strftime("%Y-%m-%d")
         
-        historical_data = await weather_service.get_historical_weather(
-            lat, lon, start_date, end_date
-        )
+        try:
+            historical_data = await weather_service.get_historical_weather(
+                lat, lon, start_date, end_date
+            )
+        except WeatherServiceError as e:
+            if e.status_code == 429:
+                raise HTTPException(status_code=429, detail=f"Rate limited: {e.message}. Retry after {e.retry_after}s")
+            raise HTTPException(status_code=e.status_code, detail=e.message)
         
         if historical_data:
             daily = historical_data.get("daily", {})
@@ -442,9 +463,14 @@ async def search_locations(
         return [LocationResponse.model_validate(loc) for loc in locations]
     
     # If not found, search via Open-Meteo geocoding
-    weather_service = WeatherService()
-    results = await weather_service.geocode(query)
-    await weather_service.close()
+    try:
+        weather_service = WeatherService()
+        results = await weather_service.geocode(query)
+        await weather_service.close()
+    except WeatherServiceError as e:
+        if e.status_code == 429:
+            raise HTTPException(status_code=429, detail=f"Rate limited: {e.message}. Retry after {e.retry_after}s")
+        raise HTTPException(status_code=e.status_code, detail=e.message)
     
     return [
         {

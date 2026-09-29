@@ -19,6 +19,7 @@ import { formatTemperature, formatDateTime } from './utils/weather';
 import type { Location, CurrentWeatherResponse, HistoricalAnalysisResponse, WeatherForecast } from './types';
 import { weatherApi } from './services/api';
 import { PredictionsSummary, StatisticsSummary } from './components/StatComponents';
+import { PWAInstallPrompt } from './components/PWAInstallPrompt';
 
 // Main App with Router
 function AppRouter() {
@@ -312,6 +313,10 @@ function MainApp() {
             />
           </div>
         )}
+        
+        {/* PWA Install Prompt & Offline/Update Indicators */}
+        <PWAInstallPrompt />
+
       </main>
 
       {/* Footer */}

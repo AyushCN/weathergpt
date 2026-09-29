@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 import os
 
 
@@ -14,9 +14,18 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "mysql+pymysql://weathergpt:weathergpt@127.0.0.1:3306/weathergpt"
     
-    # Groq API
+    # LLM Providers
+    LLM_PRIMARY_PROVIDER: str = "groq"  # groq, ollama
+    LLM_FALLBACK_PROVIDERS: str = "ollama,keyword"  # comma-separated
+    LLM_AUTO_SELECT: bool = True
+    
+    # Groq API (Online)
     GROQ_API_KEY: str = ""
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
+    # Ollama (Local LLM)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "llama3.1:8b"
 
     # Weather APIs
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
@@ -34,7 +43,7 @@ class Settings(BaseSettings):
     FETCH_INTERVAL_MINUTES: int = 30
 
     # CORS
-    CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
 
     # JWT Authentication
     SECRET_KEY: str = "your-super-secret-key-change-in-production-min-32-chars"

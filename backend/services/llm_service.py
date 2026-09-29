@@ -3,6 +3,7 @@ import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from groq import AsyncGroq
+import httpx
 from backend.config import settings
 from backend.schemas import IntentType
 
@@ -11,13 +12,119 @@ logger = logging.getLogger(__name__)
 
 class LLMService:
     def __init__(self):
+        self.groq_client = None
+        self.ollama_client = None
+        self.current_provider = None
+        self.model = None
+        
+        # Initialize providers based on config
+        self._init_providers()
+    
+    def _init_providers(self):
+        """Initialize available LLM providers based on config."""
+        providers = []
+        
+        # Check Groq
         if settings.GROQ_API_KEY:
-            self.client = AsyncGroq(api_key=settings.GROQ_API_KEY)
-            self.model = settings.GROQ_MODEL
+            providers.append(("groq", lambda: setattr(self, 'groq_client', AsyncGroq(api_key=settings.GROQ_API_KEY))))
+        
+        # Check Ollama
+        providers.append(("ollama", lambda: setattr(self, 'ollama_client', httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=60.0))))
+        
+        # Keyword fallback is always available
+        providers.append(("keyword", lambda: None))
+        
+        # Select primary provider
+        primary = settings.LLM_PRIMARY_PROVIDER
+        fallback = [p.strip() for p in settings.LLM_FALLBACK_PROVIDERS.split(",")]
+        
+        if settings.LLM_AUTO_SELECT:
+            # Try primary first, then fallbacks
+            for provider_name in [primary] + fallback:
+                if provider_name == "groq" and settings.GROQ_API_KEY:
+                    self.current_provider = "groq"
+                    self.model = settings.GROQ_MODEL
+                    self.groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+                    logger.info(f"Using Groq as primary LLM provider")
+                    break
+                elif provider_name == "ollama":
+                    self.current_provider = "ollama"
+                    self.model = settings.OLLAMA_MODEL
+                    self.ollama_client = httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=60.0)
+                    logger.info(f"Using Ollama as primary LLM provider")
+                    break
+                elif provider_name == "keyword":
+                    self.current_provider = "keyword"
+                    self.model = None
+                    logger.info("Using keyword fallback as LLM provider")
+                    break
         else:
-            self.client = None
-            self.model = None
-            logger.warning("Groq API key not configured")
+            # Use specified primary
+            if primary == "groq" and settings.GROQ_API_KEY:
+                self.current_provider = "groq"
+                self.model = settings.GROQ_MODEL
+                self.groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
+            elif primary == "ollama":
+                self.current_provider = "ollama"
+                self.model = settings.OLLAMA_MODEL
+                self.ollama_client = httpx.AsyncClient(base_url=settings.OLLAMA_BASE_URL, timeout=60.0)
+            else:
+                self.current_provider = "keyword"
+                self.model = None
+                logger.warning("No valid LLM provider configured, using keyword fallback")
+    
+    async def _call_ollama(self, messages: List[Dict], temperature: float = 0.3, max_tokens: int = 800, response_format: Optional[Dict] = None) -> Optional[str]:
+        """Call Ollama API."""
+        if not self.ollama_client:
+            return None
+        
+        try:
+            payload = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": False
+            }
+            if response_format:
+                payload["format"] = response_format.get("type", "json")
+            
+            response = await self.ollama_client.post("/api/chat", json=payload)
+            response.raise_for_status()
+            result = response.json()
+            return result.get("message", {}).get("content", "").strip()
+        except Exception as e:
+            logger.error(f"Ollama API error: {e}")
+            return None
+    
+    async def _call_groq(self, messages: List[Dict], temperature: float = 0.3, max_tokens: int = 800, response_format: Optional[Dict] = None) -> Optional[str]:
+        """Call Groq API."""
+        if not self.groq_client:
+            return None
+        
+        try:
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+            
+            response = await self.groq_client.chat.completions.create(**kwargs)
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logger.error(f"Groq API error: {e}")
+            return None
+    
+    async def _call_llm(self, messages: List[Dict], temperature: float = 0.3, max_tokens: int = 800, response_format: Optional[Dict] = None) -> Optional[str]:
+        """Call the appropriate LLM based on current provider."""
+        if self.current_provider == "groq":
+            return await self._call_groq(messages, temperature, max_tokens, response_format)
+        elif self.current_provider == "ollama":
+            return await self._call_ollama(messages, temperature, max_tokens, response_format)
+        return None
 
     async def extract_intent_and_entities(
         self,
@@ -26,7 +133,7 @@ class LLMService:
     ) -> Dict[str, Any]:
         """Extract intent, location, time, and other entities from user message."""
         
-        if not self.client:
+        if self.current_provider == "keyword":
             return self._fallback_extract(user_message)
         
         system_prompt = f"""You are a weather query understanding system. Analyze the user's message and extract:
@@ -61,8 +168,7 @@ Respond in JSON format:
 }}"""
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
+            response_text = await self._call_llm(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": f"User message: {user_message}\n\nLanguage: {language}"}
@@ -72,7 +178,10 @@ Respond in JSON format:
                 response_format={"type": "json_object"}
             )
             
-            text = response.choices[0].message.content.strip()
+            if not response_text:
+                return self._fallback_extract(user_message)
+            
+            text = response_text.strip()
             if text.startswith("```json"):
                 text = text[7:-3].strip()
             elif text.startswith("```"):
@@ -187,7 +296,7 @@ Respond in JSON format:
     ) -> str:
         """Generate natural language weather response using weather data."""
         
-        if not self.client:
+        if self.current_provider == "keyword":
             return self._fallback_response(user_message, weather_data, intent, predictions)
         
         formatted_predictions = self.format_predictions_for_llm(predictions)
@@ -216,8 +325,7 @@ Alerts: {json.dumps(alerts, default=str) if alerts else 'None'}
 Provide a natural language response:"""
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
+            response_text = await self._call_llm(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_message}
@@ -225,10 +333,15 @@ Provide a natural language response:"""
                 temperature=0.3,
                 max_tokens=800
             )
-            return response.choices[0].message.content.strip()
+            
+            if not response_text:
+                return self._fallback_response(user_message, weather_data, intent, predictions)
+            
+            return response_text.strip()
+            
         except Exception as e:
             logger.error(f"LLM response generation error: {e}")
-            return self._fallback_response(user_message, weather_data, intent)
+            return self._fallback_response(user_message, weather_data, intent, predictions)
 
     def _fallback_response(
         self,
@@ -303,7 +416,7 @@ Provide a natural language response:"""
     ) -> str:
         """Generate weather-based advisory."""
         
-        if not self.client:
+        if self.current_provider == "keyword":
             return self._fallback_advisory(weather_data, predictions, alerts)
         
         system_prompt = f"""You are WeatherGPT providing practical weather advisories.
@@ -317,8 +430,7 @@ User context: {json.dumps(user_context, default=str) if user_context else 'None'
 Provide practical advice (carry umbrella, avoid travel, irrigation timing, etc.) in {language}:"""
 
         try:
-            response = await self.client.chat.completions.create(
-                model=self.model,
+            response_text = await self._call_llm(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": "Generate weather advisory"}
@@ -326,7 +438,12 @@ Provide practical advice (carry umbrella, avoid travel, irrigation timing, etc.)
                 temperature=0.3,
                 max_tokens=500
             )
-            return response.choices[0].message.content.strip()
+            
+            if not response_text:
+                return self._fallback_advisory(weather_data, predictions, alerts)
+            
+            return response_text.strip()
+            
         except Exception as e:
             logger.error(f"LLM advisory error: {e}")
             return self._fallback_advisory(weather_data, predictions, alerts)
