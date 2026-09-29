@@ -144,6 +144,38 @@ Respond in JSON format:
             "language": "en"
         }
 
+    def format_predictions_for_llm(self, predictions: Optional[Dict[str, Any]]) -> str:
+        """Convert ML predictions to human-readable text for LLM prompt."""
+        if not predictions:
+            return "No ML predictions available."
+        
+        parts = []
+        
+        # Temperature predictions
+        if "temperature" in predictions:
+            temp_preds = predictions["temperature"]
+            temp_strs = []
+            for horizon, pred in temp_preds.items():
+                if pred.get("predicted_value") is not None:
+                    conf = pred.get('confidence', 0)
+                    temp_strs.append(f"{horizon}: {pred['predicted_value']:.1f}°C (confidence: {conf:.0%})")
+            if temp_strs:
+                parts.append(f"Temperature forecasts: {', '.join(temp_strs)}")
+        
+        # Rain predictions
+        if "rain" in predictions:
+            rain_preds = predictions["rain"]
+            rain_strs = []
+            for horizon, pred in rain_preds.items():
+                prob = pred.get("probability", 0)
+                will_rain = "Yes" if prob > 0.5 else "No"
+                conf = pred.get('confidence', 0)
+                rain_strs.append(f"{horizon}: {will_rain} ({prob:.0%} chance, confidence: {pred.get('confidence', 0):.0%})")
+            if rain_strs:
+                parts.append(f"Rain probability: {', '.join(rain_strs)}")
+        
+        return "\n".join(parts) if parts else "No ML predictions available."
+    
     async def generate_weather_response(
         self,
         user_message: str,
@@ -156,7 +188,9 @@ Respond in JSON format:
         """Generate natural language weather response using weather data."""
         
         if not self.client:
-            return self._fallback_response(user_message, weather_data, intent)
+            return self._fallback_response(user_message, weather_data, intent, predictions)
+        
+        formatted_predictions = self.format_predictions_for_llm(predictions)
         
         system_prompt = f"""You are WeatherGPT, a friendly and knowledgeable weather assistant. 
 Generate a natural, conversational response to the user's weather question using the provided data.
@@ -176,7 +210,7 @@ Intent: {intent.value}
 
 Current weather data: {json.dumps(weather_data.get('current', {}), default=str)}
 Forecast data: {json.dumps(weather_data.get('forecast', []), default=str)[:2000]}
-ML Predictions: {json.dumps(predictions, default=str) if predictions else 'None'}
+ML Predictions: {self.format_predictions_for_llm(predictions) if predictions else 'None'}
 Alerts: {json.dumps(alerts, default=str) if alerts else 'None'}
 
 Provide a natural language response:"""
@@ -200,7 +234,8 @@ Provide a natural language response:"""
         self,
         user_message: str,
         weather_data: Dict[str, Any],
-        intent: IntentType
+        intent: IntentType,
+        predictions: Optional[Dict[str, Any]] = None
     ) -> str:
         """Fallback response when LLM is unavailable."""
         current = weather_data.get("current", {})
@@ -214,9 +249,23 @@ Provide a natural language response:"""
             desc = current.get("weather_description", "unknown conditions")
             humidity = current.get("humidity")
             wind = current.get("wind_speed")
-            return f"Currently it's {temp}°C with {desc}. Humidity: {humidity}%, Wind: {wind} km/h."
+            response = f"Currently it's {temp}°C with {desc}. Humidity: {humidity}%, Wind: {wind} km/h."
+            # Add ML temperature prediction if available
+            if predictions and "temperature" in predictions:
+                pred_1h = predictions["temperature"].get("1h", {}).get("predicted_value")
+                if pred_1h is not None:
+                    response += f" ML model predicts {pred_1h:.1f}°C in 1 hour."
+            return response
         
         if intent == IntentType.RAIN_PROBABILITY:
+            # Use ML rain predictions if available
+            if predictions and "rain" in predictions:
+                rain_preds = predictions["rain"]
+                prob_1h = rain_preds.get("1h", {}).get("probability")
+                if prob_1h is not None:
+                    return f"ML model predicts {prob_1h:.0%} chance of rain in the next hour."
+            
+            # Fallback to forecast API
             rain_chance = None
             for f in forecast[:24]:
                 if f.get("precipitation_probability", 0) > 0:
@@ -228,7 +277,13 @@ Provide a natural language response:"""
         
         if intent == IntentType.TEMPERATURE:
             temp = current.get("temperature")
-            return f"Current temperature is {temp}°C."
+            response = f"Current temperature is {temp}°C."
+            # Add ML temperature prediction
+            if predictions and "temperature" in predictions:
+                pred_1h = predictions["temperature"].get("1h", {}).get("predicted_value")
+                if pred_1h is not None:
+                    response += f" ML predicts {pred_1h:.1f}°C in 1 hour."
+            return response
         
         if intent == IntentType.FORECAST:
             if forecast:
@@ -249,13 +304,13 @@ Provide a natural language response:"""
         """Generate weather-based advisory."""
         
         if not self.client:
-            return self._fallback_advisory(weather_data, alerts)
+            return self._fallback_advisory(weather_data, predictions, alerts)
         
         system_prompt = f"""You are WeatherGPT providing practical weather advisories.
 Generate helpful, actionable advice based on the weather conditions.
 
 Weather data: {json.dumps(weather_data, default=str)[:2000]}
-Predictions: {json.dumps(predictions, default=str) if predictions else 'None'}
+ML Predictions: {self.format_predictions_for_llm(predictions) if predictions else 'None'}
 Alerts: {json.dumps(alerts, default=str) if alerts else 'None'}
 User context: {json.dumps(user_context, default=str) if user_context else 'None'}
 
@@ -274,24 +329,42 @@ Provide practical advice (carry umbrella, avoid travel, irrigation timing, etc.)
             return response.choices[0].message.content.strip()
         except Exception as e:
             logger.error(f"LLM advisory error: {e}")
-            return self._fallback_advisory(weather_data, alerts)
+            return self._fallback_advisory(weather_data, predictions, alerts)
 
     def _fallback_advisory(
         self,
         weather_data: Dict[str, Any],
-        alerts: Optional[List[Dict[str, Any]]]
+        predictions: Optional[Dict[str, Any]] = None,
+        alerts: Optional[List[Dict[str, Any]]] = None
     ) -> str:
         """Fallback advisory."""
         advice = []
         current = weather_data.get("current", {})
         
-        if current.get("rainfall", 0) > 0 or current.get("precipitation", 0) > 0:
+        # Use ML rain predictions for advisory
+        if predictions and "rain" in predictions:
+            rain_prob = predictions["rain"].get("1h", {}).get("probability", 0)
+            if rain_prob > 0.5:
+                advice.append(f"High chance of rain ({rain_prob:.0%}) - carry an umbrella.")
+            elif rain_prob > 0.2:
+                advice.append(f"Possible rain ({rain_prob:.0%}) - consider an umbrella.")
+        elif current.get("rainfall", 0) > 0 or current.get("precipitation", 0) > 0:
             advice.append("Carry an umbrella - it's raining.")
         
+        # Use ML temperature predictions
+        if predictions and "temperature" in predictions:
+            pred_temp = predictions["temperature"].get("1h", {}).get("predicted_value")
+            if pred_temp is not None:
+                if pred_temp > 35:
+                    advice.append(f"Temperature rising to {pred_temp:.1f}°C - stay hydrated, avoid sun exposure.")
+                elif pred_temp < 5:
+                    advice.append(f"Temperature dropping to {pred_temp:.1f}°C - dress warmly.")
+        
+        # Current temperature fallback
         temp = current.get("temperature")
-        if temp and temp > 35:
+        if temp and temp > 35 and not (predictions and "temperature" in predictions):
             advice.append("Stay hydrated and avoid prolonged sun exposure - very hot.")
-        elif temp and temp < 10:
+        elif temp and temp < 10 and not (predictions and "temperature" in predictions):
             advice.append("Dress warmly - it's quite cold.")
         
         if alerts:
