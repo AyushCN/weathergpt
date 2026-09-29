@@ -18,25 +18,25 @@ export function PredictionsSummary({ predictions, unit }: PredictionsSummaryProp
         return (
           <div key={key} className="p-4 bg-gray-50 rounded-lg">
             <h4 className="font-medium text-gray-700 capitalize mb-2">{key} Forecast</h4>
-            {value.temperature && (
+            {key === 'temperature' && (
               <div className="space-y-1 text-sm">
-                {Object.entries(value.temperature).slice(0, 3).map(([horizon, pred]: any) => (
+                {Object.entries(value).slice(0, 3).map(([horizon, pred]: any) => (
                   <div key={horizon} className="flex justify-between">
                     <span className="text-gray-500">{horizon}</span>
                     <span className="font-medium">
-                      {formatTemperature(pred.predicted_value, unit)} ({Math.round(pred.confidence * 100)}%)
+                      {pred.predicted_value !== null ? `${formatTemperature(pred.predicted_value, unit)} (${Math.round(pred.confidence * 100)}%)` : 'N/A'}
                     </span>
                   </div>
                 ))}
               </div>
             )}
-            {value.rain && (
+            {key === 'rain' && (
               <div className="space-y-1 text-sm mt-2">
-                {Object.entries(value.rain).slice(0, 3).map(([horizon, pred]: any) => (
+                {Object.entries(value).slice(0, 3).map(([horizon, pred]: any) => (
                   <div key={horizon} className="flex justify-between">
                     <span className="text-gray-500">{horizon}</span>
                     <span className="font-medium text-blue-600">
-                      {Math.round(pred.probability * 100)}% chance
+                      {pred.probability !== null && pred.probability !== undefined ? `${Math.round(pred.probability * 100)}% chance` : 'N/A'}
                     </span>
                   </div>
                 ))}

@@ -62,7 +62,7 @@ def login(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        secure=False,  # Set to True in production with HTTPS
+        secure=True,  # Set to True in production with HTTPS
         samesite="lax",
         max_age=7 * 24 * 60 * 60,  # 7 days
     )
@@ -108,7 +108,7 @@ def refresh_token(
         key="refresh_token",
         value=new_refresh_token,
         httponly=True,
-        secure=False,
+        secure=True,
         samesite="lax",
         max_age=7 * 24 * 60 * 60,
     )
@@ -188,10 +188,8 @@ def forgot_password(
     reset_token = auth_service.generate_reset_token(user.email)
     
     # In production, send this via email
-    # For demo, return the token
     return {
-        "message": "If the email exists, a reset link has been sent",
-        "reset_token": reset_token  # Remove in production!
+        "message": "If the email exists, a reset link has been sent"
     }
 
 

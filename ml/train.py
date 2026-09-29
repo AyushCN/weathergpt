@@ -15,8 +15,8 @@ from datetime import datetime, timedelta
 # Add backend to path
 sys.path.insert(0, '/app')
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
 from sqlalchemy import select, func
 from backend.models import WeatherObservation, Location
 from backend.services.ml_service import ModelTrainer
@@ -27,9 +27,9 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def fetch_training_data(engine, location_id: int = None, days: int = 365 * 2):
+def fetch_training_data(engine, location_id: int = None, days: int = 365 * 2):
     """Fetch historical weather data for training."""
-    async with AsyncSession(engine) as session:
+    with Session(engine) as session:
         # Build query
         query = select(WeatherObservation).order_by(WeatherObservation.timestamp)
         
@@ -40,7 +40,7 @@ async def fetch_training_data(engine, location_id: int = None, days: int = 365 *
         cutoff = datetime.utcnow() - timedelta(days=days)
         query = query.where(WeatherObservation.timestamp >= cutoff)
         
-        result = await session.execute(query)
+        result = session.execute(query)
         observations = result.scalars().all()
         
         # Convert to list of dicts
@@ -61,12 +61,12 @@ async def fetch_training_data(engine, location_id: int = None, days: int = 365 *
         return data
 
 
-async def main():
+def main():
     """Main training function."""
     logger.info("Starting ML model training...")
     
     # Create database engine
-    engine = create_async_engine(
+    engine = create_engine(
         settings.DATABASE_URL,
         echo=False,
     )
@@ -74,7 +74,7 @@ async def main():
     try:
         # Fetch training data
         logger.info("Fetching training data from database...")
-        training_data = await fetch_training_data(engine)
+        training_data = fetch_training_data(engine)
         
         if len(training_data) < 100:
             logger.warning(f"Insufficient training data: {len(training_data)} records. Need at least 100.")
@@ -113,10 +113,11 @@ async def main():
                 best_temp_metrics = temp_metrics
                 logger.info(f"New best temperature model (horizon={horizon}h): MAE={temp_metrics['mae']:.2f}")
             
-            if rain_metrics["f1"] > best_rain_metrics["f1"]:
+            # For rain model: use F1 if > 0, otherwise use AUC as tiebreaker
+            if rain_metrics["f1"] > best_rain_metrics["f1"] or (rain_metrics["f1"] == best_rain_metrics["f1"] and rain_metrics["auc"] > best_rain_metrics.get("auc", 0)):
                 best_rain_model = rain_model
                 best_rain_metrics = rain_metrics
-                logger.info(f"New best rain model (horizon={horizon}h): F1={rain_metrics['f1']:.3f}")
+                logger.info(f"New best rain model (horizon={horizon}h): F1={rain_metrics['f1']:.3f}, AUC={rain_metrics['auc']:.3f}")
         
         # Save best models
         os.makedirs(settings.MODEL_DIR, exist_ok=True)
@@ -125,6 +126,13 @@ async def main():
         rain_path = os.path.join(settings.MODEL_DIR, settings.RAIN_MODEL_PATH)
         
         joblib.dump(best_temp_model, temp_path)
+        
+        # Ensure we have a rain model to save (fallback to last trained if all F1=0)
+        if best_rain_model is None:
+            logger.warning("All rain models have F1=0, saving last trained rain model")
+            best_rain_model = rain_model
+            best_rain_metrics = rain_metrics
+        
         joblib.dump(best_rain_model, rain_path)
         
         logger.info(f"Models saved:")
@@ -150,7 +158,7 @@ async def main():
         logger.error(f"Training failed: {e}", exc_info=True)
         sys.exit(1)
     finally:
-        await engine.dispose()
+        engine.dispose()
 
 
 def generate_synthetic_data(n_samples: int = 1000):
@@ -210,4 +218,4 @@ def generate_synthetic_data(n_samples: int = 1000):
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

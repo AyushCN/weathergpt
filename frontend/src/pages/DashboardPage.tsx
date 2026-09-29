@@ -18,7 +18,10 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle,
-  MessageSquare
+  MessageSquare,
+  Lock,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { formatTemperature, formatDateTime, getWeatherInfo, cn } from '../utils/weather';
@@ -39,6 +42,7 @@ export function DashboardPage() {
     fetchSearchHistory,
     clearSearchHistory,
     updatePreferences,
+    updateProfile,
   } = useAuth();
   
   const navigate = useNavigate();
@@ -57,6 +61,15 @@ export function DashboardPage() {
       loadWeather();
     }
   }, [defaultLocation, authLoading]);
+
+  // Refresh user data when dashboard mounts to capture changes made in the app
+  useEffect(() => {
+    if (user && !authLoading) {
+      fetchChatSessions();
+      fetchSearchHistory();
+      fetchLocations();
+    }
+  }, [user, authLoading, fetchChatSessions, fetchSearchHistory, fetchLocations]);
 
   const loadWeather = async () => {
     if (!defaultLocation) return;
@@ -85,6 +98,7 @@ export function DashboardPage() {
         latitude: parseFloat(newLocation.lat),
         longitude: parseFloat(newLocation.lon),
         is_default: locations.length === 0,
+        timezone: 'UTC'
       });
       await fetchLocations();
       setNewLocation({ name: '', lat: '', lon: '' });
@@ -141,7 +155,7 @@ export function DashboardPage() {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600 mb-4">Please log in to access your dashboard</p>
-          <Link href="/login" className="btn-primary">Sign in</Link>
+          <Link to="/login" className="btn-primary">Sign in</Link>
         </div>
       </div>
     );
@@ -154,7 +168,7 @@ export function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <Link href="/" className="flex items-center gap-2">
+              <Link to="/" className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-weather-500 to-weather-700 flex items-center justify-center">
                   <span className="text-white text-xl">🌤️</span>
                 </div>
@@ -164,7 +178,7 @@ export function DashboardPage() {
             
             <div className="flex items-center gap-4">
               <div className="hidden sm:flex items-center gap-3">
-                <Link href="/" className="text-sm text-gray-600 hover:text-gray-900">Home</Link>
+                <Link to="/app" className="text-sm text-gray-600 hover:text-gray-900">Weather App</Link>
               </div>
               
               <div className="relative group">
@@ -178,8 +192,8 @@ export function DashboardPage() {
                   <ChevronRight className="w-4 h-4 text-gray-400" />
                 </button>
                 <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                  <Link href="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Dashboard</Link>
-                  <Link href="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
+                  <Link to="/dashboard" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Dashboard</Link>
+                  <Link to="/settings" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Settings</Link>
                   <hr className="my-1 border-gray-100" />
                   <button 
                     onClick={logout}
@@ -243,9 +257,9 @@ export function DashboardPage() {
                         </p>
                       </div>
                       {!defaultLocation && (
-                        <Link href="#locations" className="btn-primary text-sm">
+                        <Link to="/app" className="btn-primary text-sm">
                           <Plus className="w-4 h-4 mr-1" />
-                          Add Location
+                          Find Location
                         </Link>
                       )}
                     </div>
@@ -322,7 +336,7 @@ export function DashboardPage() {
                     <h3 className="font-semibold text-gray-900 mb-4">Quick Actions</h3>
                     <div className="space-y-3">
                       <Link 
-                        href="/chat" 
+                        to="/app" 
                         className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
@@ -335,47 +349,47 @@ export function DashboardPage() {
                         <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
                       </Link>
                       
-                      <Link 
-                        href="#locations" 
-                        className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                      <button 
+                        onClick={() => setActiveTab('locations')}
+                        className="w-full text-left flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
                           <MapPin className="w-5 h-5 text-blue-600" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-gray-900">Saved Locations</p>
                           <p className="text-sm text-gray-500">Manage {locations.length} locations</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
-                      </Link>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                      </button>
                       
-                      <Link 
-                        href="#history" 
-                        className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                      <button 
+                        onClick={() => setActiveTab('history')}
+                        className="w-full text-left flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
                           <History className="w-5 h-5 text-amber-600" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-gray-900">Search History</p>
                           <p className="text-sm text-gray-500">{searchHistory.length} recent searches</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
-                      </Link>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                      </button>
                       
-                      <Link 
-                        href="#chats" 
-                        className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
+                      <button 
+                        onClick={() => setActiveTab('chats')}
+                        className="w-full text-left flex items-center gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors"
                       >
                         <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
                           <MessageSquare className="w-5 h-5 text-purple-600" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="font-medium text-gray-900">Chat Sessions</p>
                           <p className="text-sm text-gray-500">{chatSessions.length} conversations</p>
                         </div>
-                        <ChevronRight className="w-4 h-4 text-gray-400 ml-auto" />
-                      </Link>
+                        <ChevronRight className="w-4 h-4 text-gray-400" />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -395,25 +409,25 @@ export function DashboardPage() {
                         return (
                           <div key={key} className="p-4 bg-gray-50 rounded-lg">
                             <h4 className="font-medium text-gray-700 capitalize mb-2">{key} Forecast</h4>
-                            {value.temperature && (
+                            {key === 'temperature' && (
                               <div className="space-y-1 text-sm">
-                                {Object.entries(value.temperature).slice(0, 3).map(([horizon, pred]: any) => (
+                                {Object.entries(value).slice(0, 3).map(([horizon, pred]: any) => (
                                   <div key={horizon} className="flex justify-between">
                                     <span className="text-gray-500">{horizon}</span>
                                     <span className="font-medium">
-                                      {formatTemperature(pred.predicted_value)} ({Math.round(pred.confidence * 100)}%)
+                                      {pred.predicted_value !== null ? `${formatTemperature(pred.predicted_value)} (${Math.round(pred.confidence * 100)}%)` : 'N/A'}
                                     </span>
                                   </div>
                                 ))}
                               </div>
                             )}
-                            {value.rain && (
+                            {key === 'rain' && (
                               <div className="space-y-1 text-sm mt-2">
-                                {Object.entries(value.rain).slice(0, 3).map(([horizon, pred]: any) => (
+                                {Object.entries(value).slice(0, 3).map(([horizon, pred]: any) => (
                                   <div key={horizon} className="flex justify-between">
                                     <span className="text-gray-500">{horizon}</span>
                                     <span className="font-medium text-blue-600">
-                                      {Math.round(pred.probability * 100)}% chance
+                                      {pred.probability !== null && pred.probability !== undefined ? `${Math.round(pred.probability * 100)}% chance` : 'N/A'}
                                     </span>
                                   </div>
                                 ))}
@@ -434,13 +448,10 @@ export function DashboardPage() {
             <div className="card animate-in">
               <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                 <h2 className="text-xl font-bold text-gray-900">Saved Locations</h2>
-                <button
-                  onClick={() => setShowAddLocation(true)}
-                  className="btn-primary"
-                >
+                <Link to="/app" className="btn-primary">
                   <Plus className="w-4 h-4 mr-1" />
-                  Add Location
-                </button>
+                  Find Location
+                </Link>
               </div>
               
               <div className="p-6">
@@ -449,13 +460,10 @@ export function DashboardPage() {
                     <MapPin className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-1">No saved locations</h3>
                     <p className="text-gray-500 mb-4">Add your first location to get personalized weather</p>
-                    <button
-                      onClick={() => setShowAddLocation(true)}
-                      className="btn-primary"
-                    >
+                    <Link to="/app" className="btn-primary">
                       <Plus className="w-4 h-4 mr-1" />
-                      Add Location
-                    </button>
+                      Find Location
+                    </Link>
                   </div>
                 ) : (
                   <div className="space-y-4">
@@ -531,7 +539,7 @@ export function DashboardPage() {
                     <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-1">No chat history</h3>
                     <p className="text-gray-500 mb-4">Start a conversation with WeatherGPT</p>
-                    <Link href="/chat" className="btn-primary">
+                    <Link to="/app" className="btn-primary">
                       <MessageSquare className="w-4 h-4 mr-1" />
                       Start Chatting
                     </Link>
@@ -541,7 +549,7 @@ export function DashboardPage() {
                     {chatSessions.map((session) => (
                       <Link
                         key={session.id}
-                        href={`/chat?session=${session.session_id}`}
+                        to={`/app?session_id=${session.session_id}`}
                         className="flex items-center justify-between p-4 rounded-lg border border-gray-200 hover:border-weather-300 hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-center gap-3">

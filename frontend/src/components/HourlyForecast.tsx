@@ -31,7 +31,7 @@ export function HourlyForecast({ forecasts, unit = 'c', hours = 24 }: HourlyFore
                 key={forecast.valid_time}
                 className={cn(
                   'flex flex-col items-center gap-2 w-20 flex-shrink-0 p-3 rounded-lg',
-                  rainProb && rainProb > 50 && 'bg-blue-50'
+                  (rainProb && rainProb > 50) ? 'bg-blue-50' : ''
                 )}
               >
                 <p className="text-xs font-medium text-gray-600">{time}</p>

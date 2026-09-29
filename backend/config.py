@@ -12,11 +12,11 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # Database
-    DATABASE_URL: str = "postgresql://weathergpt:weathergpt@127.0.0.1:5433/weathergpt"
+    DATABASE_URL: str = "mysql+pymysql://weathergpt:weathergpt@127.0.0.1:3306/weathergpt"
     
     # Groq API
     GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
 
     # Weather APIs
     OPEN_METEO_BASE_URL: str = "https://api.open-meteo.com/v1"
@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     IMD_API_KEY: Optional[str] = None
     
     # ML Models
-    MODEL_DIR: str = "/app/ml/models"
+    MODEL_DIR: str = "./ml/trained_models"
     TEMPERATURE_MODEL_PATH: str = "temperature_model.pkl"
     RAIN_MODEL_PATH: str = "rain_model.pkl"
 
@@ -37,7 +37,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list = ["http://localhost:3000", "http://localhost:5173"]
 
     # JWT Authentication
-    SECRET_KEY: str = "your-super-secret-key-change-in-production"
+    SECRET_KEY: str = "your-super-secret-key-change-in-production-min-32-chars"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     PASSWORD_HASH_ALGORITHM: str = "argon2"
 
     class Config:
-        env_file = ".env"
+        env_file = os.path.join(os.path.dirname(__file__), ".env")
         env_file_encoding = "utf-8"
         extra = "ignore"
 

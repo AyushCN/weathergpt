@@ -5,6 +5,8 @@ import { Send, Loader2, Mic, MicOff, Trash2, Copy } from 'lucide-react';
 import { chatApi } from '../services/api';
 import { formatTime } from '../utils/weather';
 import { cn } from '../utils/weather';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import type { ChatMessage, ChatRequest, WeatherAlert, WeatherForecast } from '../types';
 
 interface ChatInterfaceProps {
@@ -12,13 +14,14 @@ interface ChatInterfaceProps {
   longitude?: number;
   locationName?: string;
   language?: string;
+  initialSessionId?: string;
 }
 
-export function ChatInterface({ latitude, longitude, locationName, language = 'en' }: ChatInterfaceProps) {
+export function ChatInterface({ latitude, longitude, locationName, language = 'en', initialSessionId }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  const [sessionId] = useState(() => initialSessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -29,6 +32,26 @@ export function ChatInterface({ latitude, longitude, locationName, language = 'e
   useEffect(() => {
     scrollToBottom();
   }, [messages, scrollToBottom]);
+
+  useEffect(() => {
+    if (initialSessionId) {
+      chatApi.getHistory(initialSessionId)
+        .then(history => {
+          if (history && Array.isArray(history)) {
+            setMessages(history.map((msg: any) => ({
+              id: `msg_${msg.id || Date.now()}`,
+              role: msg.role === 'user' ? 'user' : 'assistant',
+              content: msg.content || msg.user_message || msg.ai_response,
+              timestamp: new Date(msg.created_at || Date.now()),
+              weather_data: msg.weather_data,
+              predictions: msg.predictions,
+              alerts: msg.alerts
+            })));
+          }
+        })
+        .catch(err => console.error("Failed to load chat history:", err));
+    }
+  }, [initialSessionId]);
 
   const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -170,7 +193,7 @@ export function ChatInterface({ latitude, longitude, locationName, language = 'e
             onKeyDown={handleKeyDown}
             placeholder="Ask about weather..."
             rows={1}
-            maxRows={4}
+
             disabled={isLoading}
             className="flex-1 px-4 py-2.5 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-weather-500 focus:border-transparent bg-white resize-none text-sm"
             style={{ minHeight: '44px' }}
@@ -224,12 +247,14 @@ function MessageBubble({
         message.role === 'user' ? 'text-right' : 'text-left'
       )}>
         <div className={cn(
-          'inline-block px-4 py-2 rounded-2xl',
+          'inline-block px-4 py-2 rounded-2xl markdown-body break-words',
           message.role === 'user' 
             ? 'bg-weather-600 text-white rounded-tr-none' 
             : 'bg-gray-100 text-gray-900 rounded-tl-none'
         )}>
-          <p className="whitespace-pre-wrap break-words">{message.content}</p>
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+            {message.content}
+          </ReactMarkdown>
         </div>
         
         <div className="flex items-center gap-2 mt-1">
@@ -275,25 +300,23 @@ function PredictionsDisplay({ predictions }: { predictions: Record<string, any> 
   return (
     <div>
       <p className="font-medium text-gray-700">📊 ML Predictions</p>
-      <div className="grid grid-cols-2 gap-2 text-xs">
-        {Object.entries(predictions).map(([key, value]) => {
-          if (key === 'generated_at') return null;
-          return (
-            <div key={key} className="bg-white p-2 rounded">
-              <p className="font-medium text-gray-600 capitalize">{key}</p>
-              {value.temperature && (
-                <p>Temp: {Object.entries(value.temperature).map(([h, t]: any) => 
-                  `${h}: ${t.predicted_value}°C (${Math.round(t.confidence * 100)}%)`
-                ).join(', ')}</p>
-              )}
-              {value.rain && (
-                <p>Rain: {Object.entries(value.rain).map(([h, r]: any) => 
-                  `${h}: ${Math.round(r.probability * 100)}%`
-                ).join(', ')}</p>
-              )}
-            </div>
-          );
-        })}
+      <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+        {predictions.temperature && (
+          <div className="bg-white p-2 rounded">
+            <p className="font-medium text-gray-600">Temperature</p>
+            {Object.entries(predictions.temperature).map(([h, t]: any) => (
+              <p key={h}>{h}: {t.predicted_value}°C ({Math.round(t.confidence * 100)}%)</p>
+            ))}
+          </div>
+        )}
+        {predictions.rain && (
+          <div className="bg-white p-2 rounded">
+            <p className="font-medium text-gray-600">Rain</p>
+            {Object.entries(predictions.rain).map(([h, r]: any) => (
+              <p key={h}>{h}: {Math.round(r.probability * 100)}%</p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

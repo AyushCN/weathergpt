@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-keywords": "^5.1.0",
     "axios": "^1.7.7",
     "chart.js": "^4.4.5",
     "clsx": "^2.1.1",
@@ -18,11 +20,14 @@
     "react": "^18.3.1",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^7.18.4",
+    "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.1",
+    "@types/node": "^26.6.3",
     "@types/react": "^18.3.10",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.2",

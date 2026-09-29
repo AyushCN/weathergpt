@@ -178,10 +178,10 @@ class AuthService:
     def create_tokens(self, user: User) -> tuple[str, str]:
         """Create access and refresh tokens for a user."""
         access_token = self.create_access_token(
-            data={"sub": user.id, "email": user.email, "role": user.role.value}
+            data={"sub": str(user.id), "email": user.email, "role": user.role.value}
         )
         refresh_token = self.create_refresh_token(
-            data={"sub": user.id, "email": user.email}
+            data={"sub": str(user.id), "email": user.email}
         )
         return access_token, refresh_token
 
@@ -204,7 +204,7 @@ class AuthService:
             return None
         
         return self.create_access_token(
-            data={"sub": user.id, "email": user.email, "role": user.role.value}
+            data={"sub": str(user.id), "email": user.email, "role": user.role.value}
         )
 
     def generate_reset_token(self, email: str) -> str:

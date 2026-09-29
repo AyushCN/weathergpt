@@ -17,6 +17,7 @@ from backend.schemas import (
     WeatherAlertResponse,
     WeatherPredictionResponse,
     HistoricalAnalysisResponse,
+    HistoricalWeatherResponse,
 )
 from backend.models import Location, WeatherObservation, WeatherForecast, WeatherAlert, WeatherPrediction, User
 
@@ -345,7 +346,7 @@ async def get_historical_analysis(
         start_date = (datetime.now() - timedelta(days=years * 365)).strftime("%Y-%m-%d")
         
         historical_data = await weather_service.get_historical_weather(
-            latitude, longitude, start_date, end_date
+            lat, lon, start_date, end_date
         )
         
         if historical_data:
@@ -368,10 +369,13 @@ async def get_historical_analysis(
                     "avg_wind_speed": daily.get("wind_speed_10m_max", [None])[i],
                     "source": "open-meteo-archive",
                 }
-                historical_records.append(db_service.save_historical(hist_data))
+                historical_records.append(hist_data)
+            
+            db_service.bulk_save_historical(historical_records)
             
             # Recalculate stats
             stats = db_service.get_historical_statistics(location.id, years)
+            db.commit()
     
     # Get historical records for response
     hist_records = db_service.get_historical_range(

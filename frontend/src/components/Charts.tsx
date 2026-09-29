@@ -201,7 +201,7 @@ export function RainfallChart({ data, className }: RainfallChartProps) {
               backgroundColor: 'rgba(0, 0, 0, 0.8)',
               padding: 12,
               callbacks: {
-                label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(1)} mm`,
+                label: (context) => `${context.dataset.label}: ${context.parsed.y?.toFixed(1) || 0} mm`,
               },
             },
           },

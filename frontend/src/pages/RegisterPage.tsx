@@ -17,7 +17,7 @@ export function RegisterPage() {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/';
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
   
   const { register } = useAuth();
 
@@ -53,9 +53,9 @@ export function RegisterPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-weather-500 to-weather-700 flex items-center justify-center">
-              <span className="text-white text-2xl">🌤️</span>
+          <Link to="/" className="inline-flex items-center gap-2 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-500/30">
+              <span className="text-white text-2xl material-symbols-outlined">routine</span>
             </div>
           </Link>
           <h2 className="text-3xl font-bold text-gray-900">Create your account</h2>
@@ -181,7 +181,7 @@ export function RegisterPage() {
 
         <p className="text-center text-sm text-gray-600">
           Already have an account?{' '}
-          <Link href="/login" className="font-medium text-weather-600 hover:text-weather-500">
+          <Link to="/login" className="font-medium text-brand-600 hover:text-brand-500">
             Sign in
           </Link>
         </p>

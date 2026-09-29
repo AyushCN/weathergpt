@@ -67,7 +67,7 @@ export function ResetPasswordPage() {
             <span>Invalid or missing reset token</span>
           </div>
           <p className="mt-4 text-gray-600">Please request a new password reset link.</p>
-          <Link href="/forgot-password" className="mt-4 inline-block text-weather-600 hover:text-weather-500 font-medium">
+          <Link to="/forgot-password" className="mt-4 inline-block text-weather-600 hover:text-weather-500 font-medium">
             Request new link
           </Link>
         </div>
@@ -79,7 +79,7 @@ export function ResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
+          <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-weather-500 to-weather-700 flex items-center justify-center">
               <span className="text-white text-2xl">🌤️</span>
             </div>
@@ -171,7 +171,7 @@ export function ResetPasswordPage() {
 
         <p className="text-center text-sm text-gray-600">
           Remember your password?{' '}
-          <Link href="/login" className="font-medium text-weather-600 hover:text-weather-500">
+          <Link to="/login" className="font-medium text-weather-600 hover:text-weather-500">
             Sign in
           </Link>
         </p>

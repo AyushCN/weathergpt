@@ -44,7 +44,7 @@ class DatabaseService:
             )
         )
         result = self.db.execute(stmt)
-        location = result.scalar_one_or_none()
+        location = result.scalars().first()
         
         if location:
             return location
@@ -217,7 +217,7 @@ class DatabaseService:
             )
         )
         result = self.db.execute(stmt)
-        existing = result.scalar_one_or_none()
+        existing = result.scalars().first()
         
         if existing:
             # Update existing

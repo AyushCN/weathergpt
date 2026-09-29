@@ -15,7 +15,7 @@ export function LoginPage() {
   
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || '/';
+  const redirectTo = searchParams.get('redirect') || '/dashboard';
   
   const { login } = useAuth();
 
@@ -40,12 +40,12 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <Link href="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-weather-500 to-weather-700 flex items-center justify-center">
-              <span className="text-white text-2xl">🌤️</span>
+          <Link to="/" className="inline-flex items-center gap-2 mb-6">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-500/30">
+              <span className="text-white text-2xl material-symbols-outlined">routine</span>
             </div>
           </Link>
-          <h2 className="text-3xl font-bold text-gray-900">Welcome back</h2>
+          <h2 className="text-3xl font-bold text-gray-900 tracking-tight">Welcome back</h2>
           <p className="mt-2 text-gray-600">Sign in to your WeatherGPT account</p>
         </div>
 
@@ -119,15 +119,15 @@ export function LoginPage() {
                   id="remember"
                   name="remember"
                   type="checkbox"
-                  className="h-4 w-4 text-weather-600 focus:ring-weather-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-brand-600 focus:ring-brand-500 border-gray-300 rounded"
                 />
                 <label htmlFor="remember" className="ml-2 block text-sm text-gray-900">
                   Remember me
                 </label>
               </div>
               <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-weather-600 hover:text-weather-500"
+                to="/forgot-password"
+                className="text-sm font-medium text-brand-600 hover:text-brand-500"
               >
                 Forgot password?
               </Link>
@@ -152,7 +152,7 @@ export function LoginPage() {
 
         <p className="text-center text-sm text-gray-600">
           Don't have an account?{' '}
-          <Link href="/register" className="font-medium text-weather-600 hover:text-weather-500">
+          <Link to="/register" className="font-medium text-brand-600 hover:text-brand-500">
             Sign up
           </Link>
         </p>

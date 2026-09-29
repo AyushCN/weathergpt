@@ -1,6 +1,6 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, AuthContext } from './hooks/useAuth';
+import { BrowserRouter, Routes, Route, Navigate, useSearchParams } from 'react-router-dom';
+import { AuthProvider, AuthContext, useAuth } from './hooks/useAuth';
 import { ProtectedRoute, PublicRoute } from './components/ProtectedRoute';
 import { LocationSearch } from './components/LocationSearch';
 import { CurrentWeatherCard } from './components/CurrentWeatherCard';
@@ -14,10 +14,11 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage';
 import { ResetPasswordPage } from './pages/ResetPasswordPage';
+import { LandingPage } from './pages/LandingPage';
 import { formatTemperature, formatDateTime } from './utils/weather';
 import type { Location, CurrentWeatherResponse, HistoricalAnalysisResponse, WeatherForecast } from './types';
-import { weatherApi, chatApi } from './services/api';
-import { PredictionsSummary, StatisticsSummary, StatCard } from './components/StatComponents';
+import { weatherApi } from './services/api';
+import { PredictionsSummary, StatisticsSummary } from './components/StatComponents';
 
 // Main App with Router
 function AppRouter() {
@@ -35,8 +36,11 @@ function AppRouter() {
           <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           
-          {/* Main App (Public but enhanced with auth) */}
-          <Route path="/" element={<MainApp />} />
+          {/* Main App (Protected) */}
+          <Route path="/app" element={<ProtectedRoute><MainApp /></ProtectedRoute>} />
+          
+          {/* Landing Page */}
+          <Route path="/" element={<LandingPage />} />
           
           {/* Redirects */}
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -48,12 +52,15 @@ function AppRouter() {
 
 // Main Weather App Component
 function MainApp() {
+  const [searchParams] = useSearchParams();
+  const initialSessionId = searchParams.get('session_id') || undefined;
+
   const [location, setLocation] = React.useState<Location | null>(null);
   const [currentWeather, setCurrentWeather] = React.useState<CurrentWeatherResponse | null>(null);
   const [forecast, setForecast] = React.useState<WeatherForecast[]>([]);
   const [historical, setHistorical] = React.useState<HistoricalAnalysisResponse | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [activeTab, setActiveTab] = React.useState<'current' | 'forecast' | 'historical' | 'chat'>('current');
+  const [activeTab, setActiveTab] = React.useState<'current' | 'forecast' | 'historical' | 'chat'>(initialSessionId ? 'chat' : 'current');
   const [unit, setUnit] = React.useState<'c' | 'f'>('c');
 
   // Default location (Bangalore)
@@ -101,85 +108,96 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-weather-500 to-weather-700 flex items-center justify-center">
-                <span className="text-white text-xl">🌤️</span>
+    <div className="min-h-screen bg-brand-50 relative font-sans">
+      {/* Dynamic Background Effects */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-brand-400 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style={{animationDelay: '0s'}}></div>
+        <div className="absolute top-40 -left-40 w-72 h-72 bg-brand-300 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style={{animationDelay: '2s'}}></div>
+        <div className="absolute -bottom-40 left-1/2 w-96 h-96 bg-brand-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-float" style={{animationDelay: '4s'}}></div>
+      </div>
+
+      {/* Main Container */}
+      <div className="relative z-10 flex flex-col min-h-screen">
+        {/* Header */}
+        <header className="bg-white/70 backdrop-blur-xl border-b border-white/40 sticky top-0 z-40 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-20">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brand-500 to-brand-700 flex items-center justify-center shadow-lg shadow-brand-500/30 transform hover:scale-105 transition-transform duration-300">
+                  <span className="text-white text-2xl material-symbols-outlined">routine</span>
+                </div>
+                <div>
+                  <h1 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-900 to-brand-600 tracking-tight">WeatherGPT</h1>
+                  <p className="text-sm text-brand-500 font-medium">AI-Powered Weather Intelligence</p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">WeatherGPT</h1>
-                <p className="text-xs text-gray-500">AI-Powered Weather Intelligence</p>
-              </div>
-            </div>
-            
-            <LocationSearch 
-              onSelect={handleLocationSelect} 
-              defaultLocation={location || defaultLocation}
-            />
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setUnit(u => u === 'c' ? 'f' : 'c')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  unit === 'c' 
-                    ? 'bg-weather-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                °C
-              </button>
-              <button
-                onClick={() => setUnit(u => u === 'c' ? 'f' : 'c')}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  unit === 'f' 
-                    ? 'bg-weather-600 text-white' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                °F
-              </button>
               
-              <AuthNavLink />
+              <LocationSearch 
+                onSelect={handleLocationSelect} 
+                defaultLocation={location || defaultLocation}
+              />
+              
+              <div className="flex items-center gap-3">
+                <div className="bg-white/50 backdrop-blur-md p-1 rounded-xl border border-white/40 shadow-sm flex items-center">
+                  <button
+                    onClick={() => setUnit('c')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                      unit === 'c' 
+                        ? 'bg-brand-600 text-white shadow-md' 
+                        : 'text-brand-600 hover:bg-white/60'
+                    }`}
+                  >
+                    °C
+                  </button>
+                  <button
+                    onClick={() => setUnit('f')}
+                    className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all duration-300 ${
+                      unit === 'f' 
+                        ? 'bg-brand-600 text-white shadow-md' 
+                        : 'text-brand-600 hover:bg-white/60'
+                    }`}
+                  >
+                    °F
+                  </button>
+                </div>
+                
+                <AuthNavLink />
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      {/* Tab Navigation */}
-      <nav className="bg-white border-b border-gray-200 sticky top-16 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex overflow-x-auto" role="tablist">
-            {[
-              { id: 'current', label: 'Current', icon: '🌡️' },
-              { id: 'forecast', label: 'Forecast', icon: '📅' },
-              { id: 'historical', label: 'Historical', icon: '📊' },
-              { id: 'chat', label: 'Chat', icon: '💬' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                role="tab"
-                aria-selected={activeTab === tab.id}
-                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'border-weather-600 text-weather-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
-              >
-                <span>{tab.icon}</span>
-                {tab.label}
-              </button>
-            ))}
+        {/* Tab Navigation */}
+        <nav className="bg-white/40 backdrop-blur-md border-b border-white/30 sticky top-20 z-30 shadow-sm">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex space-x-2 p-2 overflow-x-auto" role="tablist">
+              {[
+                { id: 'current', label: 'Current', icon: 'thermometer' },
+                { id: 'forecast', label: 'Forecast', icon: 'calendar_month' },
+                { id: 'historical', label: 'Historical', icon: 'bar_chart' },
+                { id: 'chat', label: 'Chat', icon: 'chat_bubble' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as typeof activeTab)}
+                  role="tab"
+                  aria-selected={activeTab === tab.id}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'bg-white text-brand-700 shadow-sm border border-brand-100'
+                      : 'text-brand-600 hover:bg-white/60 hover:text-brand-800'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-lg">{tab.icon}</span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
 
-      {/* Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Content */}
+        <main className="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 relative z-10">
         {isLoading && (
           <div className="fixed top-16 left-0 right-0 h-2 bg-weather-500 animate-pulse z-50" />
         )}
@@ -290,43 +308,41 @@ function MainApp() {
               longitude={location.longitude}
               locationName={location.name}
               language="en"
+              initialSessionId={initialSessionId}
             />
           </div>
         )}
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <p className="text-center text-sm text-gray-500">
+      <footer className="bg-white/40 backdrop-blur-md border-t border-white/40 mt-auto relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <p className="text-center text-sm text-brand-600 font-medium">
             WeatherGPT • Data from Open-Meteo (ECMWF) • ML Predictions via XGBoost • Powered by Gemini
           </p>
         </div>
       </footer>
+      </div>
     </div>
   );
 }
 
 // Auth Navigation Link Component
 function AuthNavLink() {
-  const { isAuthenticated, isLoading, user, logout } = React.useContext(AuthContext);
-  
-  if (isLoading) {
-    return <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse" />;
-  }
+  const { isAuthenticated, logout, user } = useAuth();
   
   if (isAuthenticated) {
     return (
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-weather-100 flex items-center justify-center">
-          <span className="text-sm font-medium text-weather-700">
+      <div className="flex items-center gap-3 bg-white/50 backdrop-blur-md px-3 py-1.5 rounded-xl border border-white/40 shadow-sm">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center shadow-sm text-white">
+          <span className="text-sm font-bold">
             {user?.name?.charAt(0).toUpperCase() || 'U'}
           </span>
         </div>
-        <span className="hidden sm:block text-sm font-medium text-gray-700">{user?.name}</span>
+        <span className="hidden sm:block text-sm font-semibold text-brand-900">{user?.name}</span>
         <button 
           onClick={logout}
-          className="btn-ghost text-sm"
+          className="btn-ghost text-sm px-2 py-1 text-brand-600 hover:text-brand-800"
         >
           Logout
         </button>
@@ -337,7 +353,7 @@ function AuthNavLink() {
   return (
     <div className="flex items-center gap-2">
       <a href="/login" className="btn-ghost text-sm">Sign in</a>
-      <a href="/register" className="btn-primary text-sm">Get Started</a>
+      <a href="/register" className="btn-primary text-sm shadow-brand-500/30">Get Started</a>
     </div>
   );
 }

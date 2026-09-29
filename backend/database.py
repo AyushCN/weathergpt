@@ -1,15 +1,15 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from typing import Generator
-from config import settings
+from backend.config import settings
 
 
 class Base(DeclarativeBase):
     pass
 
 
-# Use synchronous engine with psycopg2
-sync_db_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://")
+# Use synchronous engine with pymysql for MariaDB/MySQL
+sync_db_url = settings.DATABASE_URL
 
 engine = create_engine(
     sync_db_url,
@@ -28,6 +28,10 @@ def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
