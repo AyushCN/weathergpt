@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     FETCH_INTERVAL_MINUTES: int = 30
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = ["*"]
 
     # JWT Authentication
     SECRET_KEY: str = "your-super-secret-key-change-in-production-min-32-chars"
