@@ -15,6 +15,7 @@ engine = create_engine(
     sync_db_url,
     echo=settings.DEBUG,
     pool_pre_ping=True,
+    connect_args={"ssl": {"ca": "/etc/ssl/certs/ca-certificates.crt"}} if ("tidbcloud" in sync_db_url or "aivencloud" in sync_db_url) else {}
 )
 
 SessionLocal = sessionmaker(
