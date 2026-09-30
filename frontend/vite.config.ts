@@ -38,15 +38,14 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
-          { urlPattern: new RegExp('^https://api\\.open-meteo\\.com/.*', 'i'), handler: 'StaleWhileRevalidate', options: { cacheName: 'open-meteo-cache', expiration: { maxEntries: 50, maxAgeSeconds: 600 }, networkTimeoutSeconds: 10 } },
+          { urlPattern: new RegExp('^https://api\\.open-meteo\\.com/.*', 'i'), handler: 'NetworkFirst', options: { cacheName: 'open-meteo-cache', expiration: { maxEntries: 50, maxAgeSeconds: 600 }, networkTimeoutSeconds: 10 } },
           { urlPattern: new RegExp('^https://geocoding-api\\.open-meteo\\.com/.*', 'i'), handler: 'StaleWhileRevalidate', options: { cacheName: 'geocoding-cache', expiration: { maxEntries: 100, maxAgeSeconds: 3600 } } },
           { urlPattern: new RegExp('^https://fonts\\.googleapis\\.com/.*', 'i'), handler: 'CacheFirst', options: { cacheName: 'google-fonts-cache', expiration: { maxEntries: 20, maxAgeSeconds: 31536000 } } },
           { urlPattern: new RegExp('^https://fonts\\.gstatic\\.com/.*', 'i'), handler: 'CacheFirst', options: { cacheName: 'gstatic-fonts-cache', expiration: { maxEntries: 20, maxAgeSeconds: 31536000 } } }
-        ]
-      },
-      offlineGoogleAnalytics: false,
-      navigateFallback: '/index.html',
-      navigateFallbackDenylist: [new RegExp('^/api')]
+        ],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api/]
+      }
     })
   ],
   resolve: { alias: { '@': path.resolve(__dirname, './src') } },
