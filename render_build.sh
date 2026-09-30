@@ -10,7 +10,7 @@ pip install -r backend/requirements.txt
 # Install frontend dependencies and build
 echo "Building frontend..."
 cd frontend
-npm install --include=dev
+NODE_ENV=development npm install
 npm run build
 cd ..
 
