@@ -54,6 +54,8 @@ export function DashboardPage() {
   const [showAddLocation, setShowAddLocation] = useState(false);
   const [newLocation, setNewLocation] = useState({ name: '', lat: '', lon: '' });
   const [isAddingLocation, setIsAddingLocation] = useState(false);
+  const [weatherAlerts, setWeatherAlerts] = useState<any[]>([]);
+  const [showAlertsModal, setShowAlertsModal] = useState(false);
 
   // Load weather for default location on mount
   useEffect(() => {
@@ -79,6 +81,16 @@ export function DashboardPage() {
     try {
       const weather = await weatherApi.getCurrent(defaultLocation.latitude, defaultLocation.longitude, defaultLocation.location_name);
       setCurrentWeather(weather);
+      
+      try {
+        const alerts = await weatherApi.getAlerts(defaultLocation.latitude, defaultLocation.longitude);
+        if (alerts && alerts.length > 0) {
+          setWeatherAlerts(alerts);
+          setShowAlertsModal(true);
+        }
+      } catch (alertErr) {
+        console.error('Failed to load alerts:', alertErr);
+      }
     } catch (err: any) {
       setWeatherError('Failed to load weather data');
       console.error('Weather load error:', err);
@@ -718,6 +730,24 @@ export function DashboardPage() {
                         <option value="bn">বাংলা</option>
                       </select>
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Location</label>
+                      <select
+                        value={defaultLocation?.id || ''}
+                        onChange={(e) => {
+                          const loc = locations.find(l => l.id.toString() === e.target.value);
+                          if (loc) handleSetDefault(loc);
+                        }}
+                        className="input"
+                      >
+                        <option value="" disabled>Select a location</option>
+                        {locations.map(loc => (
+                          <option key={loc.id} value={loc.id}>
+                            {loc.location_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="flex items-center">
                       <input
                         type="checkbox"
@@ -758,6 +788,40 @@ export function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Alerts Modal */}
+      {showAlertsModal && weatherAlerts.length > 0 && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-red-50">
+              <h3 className="text-lg font-semibold text-red-900 flex items-center gap-2">
+                <Bell className="w-5 h-5 text-red-600" />
+                Weather Alerts
+              </h3>
+              <button onClick={() => setShowAlertsModal(false)} className="text-red-500 hover:text-red-700 text-xl font-bold">
+                &times;
+              </button>
+            </div>
+            <div className="p-4 max-h-96 overflow-y-auto space-y-4">
+              {weatherAlerts.map((alert, idx) => (
+                <div key={idx} className="bg-red-50 border border-red-100 p-3 rounded-lg">
+                  <h4 className="font-semibold text-red-800">{alert.title || alert.event}</h4>
+                  <p className="text-sm text-red-600 mt-1">{alert.description}</p>
+                  <p className="text-xs text-red-500 mt-2 font-medium">Severity: {alert.severity}</p>
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
+              <button
+                onClick={() => setShowAlertsModal(false)}
+                className="btn-primary bg-red-600 hover:bg-red-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
