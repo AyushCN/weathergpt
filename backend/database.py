@@ -11,11 +11,17 @@ class Base(DeclarativeBase):
 # Use synchronous engine with pymysql for MariaDB/MySQL
 sync_db_url = settings.DATABASE_URL
 
+import ssl
+
+ssl_context = ssl.create_default_context()
+ssl_context.check_hostname = False
+ssl_context.verify_mode = ssl.CERT_NONE
+
 engine = create_engine(
     sync_db_url,
     echo=settings.DEBUG,
     pool_pre_ping=True,
-    connect_args={"ssl": {"ca": "/etc/ssl/certs/ca-certificates.crt"}} if ("tidbcloud" in sync_db_url or "aivencloud" in sync_db_url) else {}
+    connect_args={"ssl": ssl_context} if ("tidbcloud" in sync_db_url or "aivencloud" in sync_db_url) else {}
 )
 
 SessionLocal = sessionmaker(
